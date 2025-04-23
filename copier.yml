@@ -5,3 +5,4 @@ _exclude:
   - "environments/*"
   - "!environments/sample_environment"
   - "!environments/__init__.py"
+  - ".idea"
