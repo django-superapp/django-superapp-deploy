@@ -1,0 +1,15 @@
+.env*
+!generated_outputs/.gitkeep
+*.log
+*.pot
+*.pyc
+__pycache__/
+venv
+/generated_outputs/
+!*.sealed.yml
+/secrets/*
+!secrets/.gitkeep
+!secrets/config_env.yaml.example
+!secrets/kube_config.yaml.example
+manifests.yaml
+!.aider.conf.yml

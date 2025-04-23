@@ -1,0 +1,5 @@
+generated_outputs/generated_skaffolds
+*-Secret.*
+*-secret.*
+!*sealed.yml
+

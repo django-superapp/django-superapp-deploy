@@ -1,0 +1,50 @@
+name: Create a new release
+on:
+  push:
+    branches:
+      - main
+jobs:
+  create_release:
+    name: Bump tag
+    runs-on: self-hosted
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@v3.3.0
+      - name: Bump version and push tag
+        uses: anothrNick/github-tag-action@1.61.0
+        id: tag_version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true
+          DEFAULT_BUMP: patch
+      - name: Fetch tags
+        run: |
+          git fetch --tags
+      - name: Bump the tag
+        run: |
+          latest_tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+          # Assume latest_tag might be empty or have different formats
+          latest_tag="${latest_tag:-v0.0.0}"
+          
+          # Remove leading 'v' if present and ensure there is at least "0.0.0"
+          normalized_tag="${latest_tag#v}"
+          if [[ ! $normalized_tag =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+          normalized_tag="0.0.0"
+          fi
+          
+          # Ensure the tag has three parts: major, minor, and patch
+          IFS='.' read -r -a version_parts <<< "$normalized_tag"
+          while [ ${#version_parts[@]} -lt 3 ]; do
+          version_parts+=("0")
+          done
+          
+          major=${version_parts[0]}
+          minor=${version_parts[1]}
+          patch=${version_parts[2]}
+          patch=$((patch + 1))
+          new_tag="v${major}.${minor}.${patch}"
+          git tag $new_tag
+          git push origin $new_tag
+          gh release create $new_tag --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_TOKEN }}

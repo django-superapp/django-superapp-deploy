@@ -1,0 +1,3 @@
+repositories:
+  - name: frr-k8s
+    url: https://metallb.github.io/frr-k8s

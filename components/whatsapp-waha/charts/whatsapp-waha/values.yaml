@@ -1,0 +1,78 @@
+# Default values for whatsapp-waha
+# This is a YAML-formatted file.
+
+replicaCount: 1
+
+image:
+  repository: devlikeapro/waha
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+# Environment variables to be passed to the container
+env: {}
+  # WAHA_API_KEY: "your-api-key"
+  # WAHA_START_SESSION: "true"
+  # Add any other environment variables needed
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: waha.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: waha-tls
+  #    hosts:
+  #      - waha.local
+
+# Basic auth configuration for ingress
+basicAuth:
+  enabled: false
+  secretName: "basic-auth"
+  realm: "Authentication Required"
+
+resources: {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

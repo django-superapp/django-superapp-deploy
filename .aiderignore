@@ -1,0 +1,6 @@
+environments
+generated_outputs
+secrets
+environments/*/generated_manifests/
+environments/*/generated_skaffolds/
+environments/*/secrets/

@@ -1,0 +1,163 @@
+# This workflow will run tests using node and then publish a package to GitHub Packages when a release is created
+# For more information see: https://help.github.com/actions/language-and-framework-guides/publishing-nodejs-packages
+
+name: Build the application
+
+on:
+  release:
+    types: [ published ]
+
+
+jobs:
+  generate_builds:
+    runs-on: self-hosted
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    outputs:
+      skaffold_names: ${{ steps.set-matrix.outputs.skaffold_names }}
+    steps:
+      - name: Cloning the repo
+        uses: actions/checkout@v4
+      - name: Configure skaffold secrets
+        id: configure_skaffold_secrets
+        run: |
+          set -e;
+          cp ./secrets/config_env.yaml.example ./secrets/config_env.yaml;
+          sed -i "s#DOCKER_PULL_SECRET_USERNAME: PLEASE_REPLACE_ME#DOCKER_PULL_SECRET_USERNAME: ${{ secrets.REGISTRY_USERNAME }}#" ./secrets/config_env.yaml
+          sed -i "s#DOCKER_PULL_SECRET_PASSWORD: PLEASE_REPLACE_ME#DOCKER_PULL_SECRET_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}#" ./secrets/config_env.yaml
+          sed -i "s#REGISTRY_USERNAME: PLEASE_REPLACE_ME#REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}#" ./secrets/config_env.yaml
+          sed -i "s#REGISTRY_PASSWORD: PLEASE_REPLACE_ME#REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}#" ./secrets/config_env.yaml
+          cat ./secrets/config_env.yaml
+
+          echo "${{ secrets.KUBE_CONFIG }}" > ./secrets/kube_config.yaml
+        working-directory: ./deploy
+      - name: Setup environment dependencies
+        run: |
+          set -e;
+          export BRIDGE_CONFIG_YAML_PATH=$(realpath ./secrets/config_env.yaml)
+          make install-ci-requirements
+        working-directory: ./deploy
+      - name: Generate skaffolds
+        id: generate_skaffolds
+        working-directory: ./deploy
+        run: |
+          set -e;
+          export IMAGES_TAG="${{ github.event.release.tag_name }}";
+          export BRIDGE_CONFIG_YAML_PATH=$(realpath ./secrets/config_env.yaml)
+          make generate-skaffolds
+      - name: Setting matrix output
+        id: set-matrix
+        working-directory: ./deploy
+        run: |
+          make -s generate-ci-build-paths > $GITHUB_OUTPUT
+  build-images:
+    runs-on: self-hosted
+    needs:
+      - generate_builds
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        skaffold_name: ${{fromJSON(needs.generate_builds.outputs.skaffold_names)}}
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Cloning the repo
+        uses: actions/checkout@v4
+      - name: Configure skaffold secrets
+        id: configure_skaffold_secrets
+        run: |
+          set -e;
+          cp ./secrets/config_env.yaml.example ./secrets/config_env.yaml;
+          sed -i "s#DOCKER_PULL_SECRET_USERNAME: PLEASE_REPLACE_ME#DOCKER_PULL_SECRET_USERNAME: ${{ secrets.REGISTRY_USERNAME }}#" ./secrets/config_env.yaml
+          sed -i "s#DOCKER_PULL_SECRET_PASSWORD: PLEASE_REPLACE_ME#DOCKER_PULL_SECRET_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}#" ./secrets/config_env.yaml
+          sed -i "s#REGISTRY_USERNAME: PLEASE_REPLACE_ME#REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}#" ./secrets/config_env.yaml
+          sed -i "s#REGISTRY_PASSWORD: PLEASE_REPLACE_ME#REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}#" ./secrets/config_env.yaml
+          cat ./secrets/config_env.yaml
+
+          echo "${{ secrets.KUBE_CONFIG }}" > ./secrets/kube_config.yaml
+        working-directory: ./deploy
+      - name: Setup environment dependencies
+        run: |
+          set -e;
+          export BRIDGE_CONFIG_YAML_PATH=$(realpath ./secrets/config_env.yaml)
+          make install-ci-requirements
+        working-directory: ./deploy
+      - name: Generate skaffolds
+        id: generate_skaffolds
+        working-directory: ./deploy
+        run: |
+          set -e;
+          export IMAGES_TAG="${{ github.event.release.tag_name }}";
+          export BRIDGE_CONFIG_YAML_PATH=$(realpath ./secrets/config_env.yaml)
+          make generate-skaffolds
+      - name: Build the application
+        id: build_app
+        working-directory: ./deploy
+        run: |
+          set -e;
+          export IMAGES_TAG="${{ github.event.release.tag_name }}";
+          export BRIDGE_CONFIG_YAML_PATH=$(realpath ./secrets/config_env.yaml)          
+          echo '${{ secrets.REGISTRY_PASSWORD }}' > docker login ${{ secrets.REGISTRY_DOMAIN }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          make build-skaffold-by-name name=${{ matrix.skaffold_name }}
+  generate_manifests:
+    runs-on: self-hosted
+    timeout-minutes: 5
+    needs: build-images
+    permissions:
+      contents: write
+      packages: write
+      attestations: write
+      id-token: write
+      pull-requests: write
+    steps:
+      - name: Cloning the repository
+        uses: actions/checkout@v4
+        with:
+          ref: 'production'
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Unlock git-crypt
+        run: |
+          echo "${{ secrets.GIT_CRYPT_KEY }}" | base64  -d > ./git-crypt-key
+          git-crypt unlock ./git-crypt-key
+          rm ./git-crypt-key
+      - name: Create release branch
+        run: |
+          git checkout -b ${{  github.ref_name }}-release
+          git push origin ${{  github.ref_name }}-release
+      - name: Merge changes from production
+        run: |
+          git fetch --tags origin
+          git checkout ${{  github.ref_name }} -- .
+      - name: Generate manifests
+        working-directory: ./deploy
+        run: |
+          export IMAGES_TAG="${{  github.ref_name }}";
+          make generate-environments-manifests
+      - name: Commit manifests
+        run: |
+          sudo chmod -R 777 ../.git
+          git config user.email "superapp@superapp.io"
+          git config user.name "SuperApp"
+          git add .
+          git commit -m "Update environmnets manifests"
+          git push origin ${{  github.ref_name }}-release
+        working-directory: ./deploy
+      - name: Lock git-crypt
+        run: |
+          git-crypt lock
+        working-directory: ./deploy
+      - name: Create release PR
+        run: gh pr create --base production --head ${{  github.ref_name }}-release --title 'Releasing ${{  github.ref_name }}' --body "" --repo $GITHUB_REPOSITORY
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+
