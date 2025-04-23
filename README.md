@@ -5,17 +5,6 @@ django_superapp bootstrap-project \
     --template-repo https://github.com/django-superapp/django-superapp-deploy ./deploy;
 ```
 
-### Guides
-- [Harvester Cluster](./guides/harvester-cluster.md)
-- [Hetzner Cluster](./guides/hetzner-cluster.md)
-- [Kubernetes Cluster](./guides/kubernetes-cluster.md)
-- [Github Runners](./guides/github-runners.md)
-- [Deployments](./guides/deployments.md)
-- [Databases](./guides/databases.md)
-- [Git Crypt](./guides/git-crypt.md)
-- [Kubeseal](./guides/kubeseal.md)
-- [Longhorn](./guides/longhorn.md)
-
 
 ### Quick setup
 0. Run `make setup-git-crypt`
@@ -31,3 +20,15 @@ django_superapp bootstrap-project \
 6. `make build-all-docker-images`
 7. `make generate-manifests`
 8. (optionally, you can deploy using skaffold) `make deploy-using-skaffold`
+
+
+### Useful Guides
+- [Harvester Cluster](./guides/harvester-cluster.md)
+- [Hetzner Cluster](./guides/hetzner-cluster.md)
+- [Kubernetes Cluster](./guides/kubernetes-cluster.md)
+- [Github Runners](./guides/github-runners.md)
+- [Deployments](./guides/deployments.md)
+- [Databases](./guides/databases.md)
+- [Git Crypt](./guides/git-crypt.md)
+- [Kubeseal](./guides/kubeseal.md)
+- [Longhorn](./guides/longhorn.md)
