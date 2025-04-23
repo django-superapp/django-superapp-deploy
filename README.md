@@ -2,7 +2,7 @@
 ```bash
 cd my_superapp;
 django_superapp bootstrap-project \
-    --template-repo https://github.com/django-superapp/django-superapp-deploy.git ./deploy;
+    --template-repo https://github.com/django-superapp/django-superapp-deploy ./deploy;
 ```
 
 ### Guides
