@@ -1,3 +1,10 @@
+### Cloning the repository
+```bash
+cd my_superapp;
+django_superapp bootstrap-project \
+    --template-repo https://github.com/django-superapp/django-superapp-deploy.git ./deploy;
+```
+
 ### Guides
 - [Harvester Cluster](./guides/harvester-cluster.md)
 - [Hetzner Cluster](./guides/hetzner-cluster.md)
