@@ -83,9 +83,6 @@ def create_registry(
     skaffold_config = {
         "apiVersion": "skaffold/v3",
         "kind": "Config",
-        "requires": [
-            c.as_skaffold_dependency for c in depends_on
-        ] if depends_on else [],
         "manifests": {
             "rawYaml": [
                 "./manifests/registry-secret.yaml",

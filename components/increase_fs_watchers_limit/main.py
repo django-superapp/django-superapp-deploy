@@ -149,9 +149,6 @@ def create_increase_fs_watchers_limit(
     skaffold_config = {
         "apiVersion": "skaffold/v3",
         "kind": "Config",
-        "requires": [
-            c.as_skaffold_dependency for c in depends_on
-        ] if depends_on else [],
         "manifests": {
             "rawYaml": [
                 "./manifests/increase-fs-watchers-limit.yaml",
