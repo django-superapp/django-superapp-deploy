@@ -40,10 +40,10 @@ done
 # Update all Helm repositories
 helm repo update
 
-# Detect environment from the current directory or use default
-CURRENT_ENV=$(basename $(find "$SKAFFOLD_ROOT_DIR/environments" -type d -mindepth 1 -maxdepth 1 | head -1))
-
-# Use the detected environment
-cd "$SKAFFOLD_ROOT_DIR/environments/$CURRENT_ENV";
-python3 main.py;
+CURRENT_DIRECTORY=$(pwd)
+cd ../../
+export PYTHONPATH=$(pwd)
+echo "$CURRENT_DIRECTORY/main.py"
+python3 "$CURRENT_DIRECTORY/main.py"
 cd "$SKAFFOLD_ROOT_DIR";
+

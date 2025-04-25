@@ -1,13 +1,6 @@
 #!/bin/bash
 set -e;
 
-file_path="/tmp/install-ci-requirements-version"
-install_ci_requirements_version="1"
-if [[ -f "$file_path" && $(<"$file_path") == "$install_ci_requirements_version" ]]; then
-    echo "install-ci-requirements.sh is already installed. skipping it";
-    exit 0;
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SKAFFOLD_ROOT_DIR="$SCRIPT_DIR/.."
 
@@ -47,7 +40,7 @@ install_linux() {
   tar -xvzf kubeseal-${KUBESEAL_VERSION:?}-linux-amd64.tar.gz kubeseal
   sudo install -m 755 kubeseal /usr/local/bin/kubeseal
 
-  python3 -m pip install --break-system-packages -r"$SKAFFOLD_ROOT_DIR/skaffold_templates/requirements.txt";
+  python3 -m pip install -r"$SKAFFOLD_ROOT_DIR/scripts/requirements.txt";
 }
 
 # Function to install packages for macOS
@@ -58,7 +51,7 @@ install_macos() {
     ln -sfn $(which docker-buildx) ~/.docker/cli-plugins/docker-buildx
     docker buildx install
 
-    python3 -m pip install --break-system-packages -r"$SKAFFOLD_ROOT_DIR/skaffold_templates/requirements.txt";
+    python3 -m pip install -r"$SKAFFOLD_ROOT_DIR/scripts/requirements.txt";
 }
 
 # Check the OS and call the appropriate function
@@ -75,5 +68,3 @@ fi
 
 source "$SKAFFOLD_ROOT_DIR/scripts/common-env.sh";
 
-
-echo "$install_ci_requirements_version" > "$file_path"

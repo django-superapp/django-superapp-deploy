@@ -10,26 +10,27 @@ config_path = os.path.join(current_dir, 'secrets/config_env.yaml')
 os.environ['CONFIG_YAML_PATH'] = config_path
 
 # Add the repository root to the Python path to enable absolute imports
-sys.path.insert(0, os.path.abspath(os.path.join(current_dir, '../../..')))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
 
 # Use absolute imports
-from ...components.base.constants import (
+from components.base.constants import (
     GENERATED_SKAFFOLD_TMP_DIR,
     GENERATED_SKAFFOLD_DIR,
     INTELLIJ_RUN_CONFIGURATIONS_ENABLED,
     CONFIG
 )
-from ...components.base.generate_skaffolds import generate_skaffolds
-from ...components.cert_manager_operator.main import create_cert_manager_operator
-from ...components.namespace.main import create_namespace
-from ...components.cert_manager_issuer.main import create_cert_manager_issuer
-from ...components.cert_manager_certificate.main import create_cert_manager_certificate
-from ...components.rancher.main import create_rancher
-from ...components.ingress_nginx.main import create_ingress_nginx
-from ...components.longhorn.main import create_longhorn
-from ...components.increase_fs_watchers_limit.main import create_increase_fs_watchers_limit
-from ...components.intellij_skaffolds_run_configurations.main import generate_intelij_skaffolds_run_configurations
-from ...components.metallb.main import create_metallb
+from components.base.generate_skaffolds import generate_skaffolds
+from components.cert_manager_operator.main import create_cert_manager_operator
+from components.namespace.main import create_namespace
+from components.cert_manager_issuer.main import create_cert_manager_issuer
+from components.cert_manager_certificate.main import create_cert_manager_certificate
+from components.rancher.main import create_rancher
+from components.ingress_nginx.main import create_ingress_nginx
+from components.longhorn.main import create_longhorn
+from components.increase_fs_watchers_limit.main import create_increase_fs_watchers_limit
+from components.intellij_skaffolds_run_configurations.main import generate_intelij_skaffolds_run_configurations
+from components.metallb.main import create_metallb
 
 
 # ===== MAIN GENERATION FUNCTION =====

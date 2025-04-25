@@ -6,7 +6,7 @@ setup-venv:
 	set -e; \
 	$(SCRIPT_DIR)/scripts/setup-venv.sh;
 
-install-ci-requirements:
+install-ci-requirements: setup-venv
 	set -e; \
 	$(SCRIPT_DIR)/scripts/install-ci-requirements.sh;
 
