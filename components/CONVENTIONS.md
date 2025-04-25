@@ -62,9 +62,9 @@ from typing import Dict, List, Optional, Any
 import os
 import yaml
 
-from base.component_types import Component
-from base.constants import GENERATED_SKAFFOLD_TMP_DIR
-from base.utils import get_chart_path
+from components.base.component_types import Component
+from components.base.constants import GENERATED_SKAFFOLD_TMP_DIR
+from components.base.utils import get_chart_path
 
 def create_example_component(
     slug: str,

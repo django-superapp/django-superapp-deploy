@@ -13,3 +13,4 @@ venv
 !secrets/kube_config.yaml.example
 manifests.yaml
 !.aider.conf.yml
+superapp_fork

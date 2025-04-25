@@ -8,9 +8,8 @@ django_superapp bootstrap-project \
 
 ### Quick setup
 0. Run `make setup-git-crypt`
-0. If you have a git-crypt key palce it in `./secrets/git-crypt.key` and then run `make unlock-git-crypt`
+0. If you have a git-crypt key palce it in `./secrets/git_crypt.key` and then run `make unlock-git-crypt`
 0. If you don't have a git-crypt key, you can generate one using `make generate-git-crypt` to save it in a 1Password note
-1. `make setup-venv`
 1. `make install-ci-requirements`
 2. create your environment in `./environments/production` from `./environments/sample_environment`
 2. setup your `deploy/environments/production/secrets/kube_config.yaml` file

@@ -1,11 +1,13 @@
-from typing import Dict, List, Optional, Any
 import os
+from typing import Dict, List, Optional, Any
 import yaml
 import base64
 
-from base.component_types import Component
-from base.constants import GENERATED_SKAFFOLD_TMP_DIR
-from base.utils import get_chart_path
+from ilio import write
+
+from components.base.component_types import Component
+from components.base.constants import GENERATED_SKAFFOLD_TMP_DIR
+from components.base.utils import get_chart_path
 
 
 def create_whatsapp_waha(
@@ -52,6 +54,8 @@ def create_whatsapp_waha(
     dir_name = f"{slug}-whatsapp-waha"
     output_dir = f'{GENERATED_SKAFFOLD_TMP_DIR}/{dir_name}'
     os.makedirs(output_dir, exist_ok=True)
+    manifests_dir = f"{output_dir}/manifests"
+    os.makedirs(manifests_dir, exist_ok=True)
     
     # Validate basic auth parameters
     if basic_auth_enabled:
@@ -113,21 +117,7 @@ def create_whatsapp_waha(
     with open(f"{output_dir}/values.yaml", "w") as file:
         yaml.dump(helm_values, file, default_flow_style=False)
     
-    # Generate Fleet configuration
-    fleet_config = {
-        "namespace": namespace,
-        "helm": {
-            "chart": get_chart_path("whatsapp-waha"),
-            "values": {
-                "valuesFiles": ["values.yaml"]
-            }
-        }
-    }
-    
-    # Write Fleet configuration
-    with open(f"{output_dir}/fleet.yaml", "w") as file:
-        yaml.dump(fleet_config, file, default_flow_style=False)
-    
+
     # Create basic auth secret if enabled
     if basic_auth_enabled and username and password:
         # Create htpasswd-like string: username:hashed_password
@@ -149,13 +139,58 @@ def create_whatsapp_waha(
         }
         
         # Write secret manifest
-        with open(f"{output_dir}/basic-auth-secret.yaml", "w") as file:
+        with open(f"{manifests_dir}/basic-auth-secret.yaml", "w") as file:
             yaml.dump(basic_auth_manifest, file, default_flow_style=False)
-    
+
+    # Generate skaffold.yaml
+    skaffold_config = {
+        "apiVersion": "skaffold/v3",
+        "kind": "Config",
+        "deploy": {
+            "helm": {
+                "releases": [
+                    {
+                        "name": f"{slug}-whatsapp-waha",
+                        "chartPath": get_chart_path("./charts/whatsapp-waha"),
+                        "valuesFiles": [
+                            f"./values.yaml"
+                        ],
+                        "namespace": namespace,
+                        "createNamespace": True,
+                        "wait": True,
+                        "upgradeOnChange": True
+                    }
+                ],
+            },
+        },
+        "manifests": {
+            "rawYaml": [
+                f"./manifests/basic-auth-secret.yaml",
+            ],
+        },
+    }
+
+    skaffold_yaml = yaml.dump(skaffold_config, default_flow_style=False)
+    write(f"{output_dir}/skaffold-whatsapp-waha.yaml", skaffold_yaml)
+
+    # Generate fleet.yaml for dependencies
+    fleet_config = {
+        "namespace": namespace,
+        "dependsOn": [
+            c.as_fleet_dependency for c in depends_on
+        ] if depends_on else [],
+        "labels": {
+            "name": f"{slug}-registry"
+        }
+    }
+
+    fleet_yaml = yaml.dump(fleet_config, default_flow_style=False)
+    write(f"{output_dir}/fleet.yaml", fleet_yaml)
+
     # Return Component object
     return Component(
         slug=slug,
+        namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-whatsapp-waha",
-        depends_on=depends_on or []
     )

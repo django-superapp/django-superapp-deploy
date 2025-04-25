@@ -66,5 +66,3 @@ else
     exit 1
 fi
 
-source "$SKAFFOLD_ROOT_DIR/scripts/common-env.sh";
-

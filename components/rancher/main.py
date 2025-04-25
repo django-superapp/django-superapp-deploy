@@ -96,9 +96,6 @@ def create_rancher(
     skaffold_config = {
         "apiVersion": "skaffold/v4beta13",
         "kind": "Config",
-        "requires": [
-            c.as_skaffold_dependency for c in depends_on
-        ] if depends_on else [],
         "deploy": {
             "helm": {
                 "flags": {
