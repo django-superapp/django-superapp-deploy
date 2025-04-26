@@ -3,6 +3,11 @@ import shutil
 import subprocess
 import sys
 import yaml
+import json
+import pprint
+from components.whatsapp_waha.main import create_whatsapp_waha
+from components.postgresql_operator.main import create_postgresql_operator_crds, create_postgresql_operator
+from components.postgresql_instance.main import create_postgres_instance as create_postgres_instance_base
 
 # Set config path before imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -246,6 +251,125 @@ def generate_all_skaffolds():
         ]
     )
 
+    # PostgreSQL Operator
+    postgresql_namespace_name = "postgresql-system"
+    postgresql_namespace = create_namespace(
+        slug="postgresql",
+        namespace=postgresql_namespace_name,
+        depends_on=[]
+    )
+    
+    postgresql_operator_crds = create_postgresql_operator_crds(
+        slug="postgresql-crds",
+        namespace=postgresql_namespace_name,
+        depends_on=[
+            postgresql_namespace
+        ]
+    )
+    
+    postgresql_operator = create_postgresql_operator(
+        slug="postgresql-operator",
+        namespace=postgresql_namespace_name,
+        depends_on=[
+            postgresql_namespace,
+            postgresql_operator_crds
+        ]
+    )
+    
+    
+    # Whatsapp WAHA
+    whatsapp_waha_config = config['components']['whatsapp_waha']
+    
+    # WhatsApp WAHA PostgreSQL Instance
+    whatsapp_db_config = whatsapp_waha_config.get('postgres_db', {})
+    whatsapp_db_name = whatsapp_db_config.get('db_name', 'whatsapp_db')
+    whatsapp_db_superuser = whatsapp_db_config.get('superuser', 'postgres')
+    whatsapp_db_superuser_password = whatsapp_db_config.get('superuser_password', 'postgres')
+    whatsapp_db_username = whatsapp_db_config.get('username', 'whatsapp_user')
+    whatsapp_db_password = whatsapp_db_config.get('password', 'whatsapp_password')
+    
+    whatsapp_waha_namespace_name = "whatsapp"
+
+    whatsapp_waha_namespace = create_namespace(
+        slug=whatsapp_waha_namespace_name,
+        namespace=whatsapp_waha_namespace_name,
+        depends_on=[]
+    )
+    
+    whatsapp_waha_postgres_instance = create_postgres_instance_base(
+        slug="whatsapp-db",
+        namespace=whatsapp_waha_namespace_name,
+        db_name=whatsapp_db_name,
+        superuser=whatsapp_db_superuser,
+        superuser_password=whatsapp_db_superuser_password,
+        username=whatsapp_db_username,
+        user_password=whatsapp_db_password,
+        replicas=whatsapp_db_config.get('replicas', 1),
+        storage_size=whatsapp_db_config.get('storage_size', '5Gi'),
+        wal_storage_size=whatsapp_db_config.get('wal_storage_size', '1Gi'),
+        repo_storage_size=whatsapp_db_config.get('repo_storage_size', '2Gi'),
+        s3_backup=whatsapp_db_config.get('s3_backup', None),
+        s3_bootstrap=whatsapp_db_config.get('s3_bootstrap', None),
+        service_type=whatsapp_db_config.get('service_type', 'LoadBalancer'),
+        service_annotations=whatsapp_db_config.get('service_annotations', {}),
+        depends_on=[
+            whatsapp_waha_namespace,  # Depend on WhatsApp namespace
+            postgresql_operator_crds,
+            postgresql_operator
+        ]
+    )
+    whatsapp_waha_domain_name=whatsapp_waha_config['domain_name']
+    whatsapp_waha_root_domain = '.'.join(whatsapp_waha_domain_name.split('.')[1:])
+
+    whatsapp_waha_cert_manager_issuer = create_cert_manager_issuer(
+        slug="whatsapp-waha-issuer",
+        namespace=whatsapp_waha_namespace_name,
+        cloudflare_email=env_vars['CLOUDFLARE_EMAIL'],
+        cloudflare_api_token=env_vars['CLOUDFLARE_API_TOKEN'],
+        depends_on=[
+            whatsapp_waha_namespace
+        ]
+    )
+
+    whatsapp_waha_cert_manager_certificate = create_cert_manager_certificate(
+        slug="whatsapp-waha-certificate",
+        namespace=whatsapp_waha_namespace_name,
+        domain_name=whatsapp_waha_domain_name,
+        issuer_secret_name=whatsapp_waha_cert_manager_issuer.issuer_secret_name,
+        certificate_dns_names=[
+            whatsapp_waha_root_domain,
+            f"*.{whatsapp_waha_root_domain}",
+        ],
+        depends_on=[
+            whatsapp_waha_namespace,
+            whatsapp_waha_cert_manager_issuer,
+        ]
+    )
+    
+    whatsapp_waha = create_whatsapp_waha(
+        slug="whatsapp",
+        namespace=whatsapp_waha_namespace_name,
+        image_repository="devlikeapro/waha",
+        image_tag="latest",
+        replicas=1,
+        env_vars={},
+        postgres_uri=whatsapp_waha_postgres_instance.normal_user_postgres_uri,
+        s3_storage=whatsapp_waha_config.get('s3_storage', None),
+        ingress_enabled=True,
+        ingress_host=whatsapp_waha_domain_name,
+        ingress_class_name="nginx",
+        ingress_tls_secret=whatsapp_waha_cert_manager_certificate.certificate_secret_name,
+        basic_auth_enabled=True,
+        username=whatsapp_waha_config['username'],
+        password=whatsapp_waha_config['password'],
+        depends_on=[
+            whatsapp_waha_namespace,
+            whatsapp_waha_cert_manager_certificate,
+            whatsapp_waha_cert_manager_issuer,
+            whatsapp_waha_postgres_instance,
+        ]
+    )
+
     # registry = create_registry(
     #     slug="registry",
     #     namespace="registry",
@@ -259,37 +383,23 @@ def generate_all_skaffolds():
 
     # Collect all components
     components = [
-        # Fix some limits on the host
-        increase_fs_watchers_limit,
-
-        # Cert-manager
-        cert_manager_namespace,
-        cert_manager_operator,
-
-        # MetalLB
-        metallb_namespace,
-        metallb,
-
-        # Ingress Nginx
-        ingress_nginx_namespace,
-        ingress_nginx,
-
-        # Longhorn
-        longhorn_namespace,
-        longhorn_cert_manager_issuer,
-        longhorn_cert_manager_certificate,
-        longhorn,
-
-        # Rancher
-        rancher_namespace,
-        rancher_cert_manager_issuer,
-        rancher_cert_manager_certificate,
-        rancher,
-
+        # PostgreSQL Operator
+        postgresql_namespace,
+        postgresql_operator_crds,
+        postgresql_operator,
+        
+        # WhatsApp WAHA
+        whatsapp_waha_namespace,
+        whatsapp_waha_cert_manager_issuer,
+        whatsapp_waha_cert_manager_certificate,
+        whatsapp_waha_postgres_instance,
+        whatsapp_waha,
     ]
     
     # Generate skaffold configurations
-    generate_skaffolds(components)
+    generate_skaffolds(
+        components=components,
+    )
     
     # Generate IntelliJ run configurations if enabled
     if INTELLIJ_RUN_CONFIGURATIONS_ENABLED or env_vars['INTELLIJ_RUN_CONFIGURATIONS_ENABLED'].lower() == 'true':
