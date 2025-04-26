@@ -12,8 +12,6 @@ env_variables="$(python3 -c "
 import sys, os
 # Add the repository root to sys.path
 sys.path.insert(0, os.path.abspath('$SKAFFOLD_ROOT_DIR'))
-# Set the config path environment variable
-os.environ['CONFIG_YAML_PATH'] = './secrets/config_env.yaml'
 # Import constants directly from the module
 from components.base.constants import *
 # Export all uppercase variables
