@@ -18,14 +18,20 @@ class Component:
     fleet_name: str
     
     @property
-    def as_fleet_dependency(self) -> Dict[str, str]:
+    def as_fleet_dependency(self) -> Dict:
         """
         Returns this component as a dependency object for other components.
         
         Returns:
             Dictionary with the name field set to the fleet_name
         """
-        return {"name": self.fleet_name}
+        return {
+            "selector": {
+                "matchLabels": {
+                    "name": self.fleet_name
+                }
+            }
+        }
 
     @property
     def as_skaffold_dependency(self) -> Dict[str, str]:
@@ -37,10 +43,3 @@ class Component:
         """
         return {"path": f"../{self.dir_name}/skaffold.yaml"}
 
-@dataclass
-class CertificateComponent(Component):
-    certificate_secret_name: str
-
-@dataclass
-class IssuerComponent(Component):
-    issuer_secret_name: str

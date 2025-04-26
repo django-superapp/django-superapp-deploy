@@ -166,12 +166,14 @@ def create_increase_fs_watchers_limit(
     
     # Generate fleet.yaml for dependencies
     fleet_config = {
-        "namespace": namespace,
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
+        "helm": {
+            "releaseName": f"{slug}-fs-watchers",
+        },
         "labels": {
-            "name": f"{slug}-fs-watchers"
+            "name": f"{slug}-fs-watchers",
         },
     }
     

@@ -42,7 +42,7 @@ function render_skaffold {
       --filename='skaffold.yaml' \
       --verbosity='debug' \
       --output="$GENERATED_MANIFESTS_DIR/$d/manifests.yaml" > "$tmpfile" 2>&1; then
-      
+
       echo "┌─────────────────────────────────────────────────────────────────┐"
       echo "│                       SKAFFOLD ERROR                            │"
       echo "└─────────────────────────────────────────────────────────────────┘"

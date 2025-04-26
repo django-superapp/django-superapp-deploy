@@ -96,7 +96,7 @@ def create_rancher(
     skaffold_config = {
         "apiVersion": "skaffold/v4beta13",
         "kind": "Config",
-        "deploy": {
+        "manifests": {
             "helm": {
                 "flags": {
                     "template": [
@@ -125,12 +125,13 @@ def create_rancher(
     
     # Generate fleet.yaml for dependencies
     fleet_config = {
-        "namespace": namespace,
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
         "helm": {
+            "helm": {
             "releaseName": f"{slug}-rancher",
+        },
             "chart": "./deploy/components/rancher/charts/rancher",
             "values": f"./{dir_name}/rancher-values.yaml"
         }

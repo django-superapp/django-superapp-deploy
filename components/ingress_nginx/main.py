@@ -116,10 +116,12 @@ def create_ingress_nginx(
     
     # Generate Fleet configuration
     fleet_config = {
-        "namespace": namespace,
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
+       "helm": {
+            "releaseName": f"{slug}-ingress-nginx",
+        },
         "labels": {
             "name": f"{slug}-ingress-nginx"
         },

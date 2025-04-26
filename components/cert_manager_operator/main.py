@@ -81,12 +81,14 @@ def create_cert_manager_operator(
     # Generate Fleet configuration with webhook patches
     # These patches prevent Fleet from detecting changes in webhook configurations
     fleet_config = {
-        "namespace": namespace,
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
+        "helm": {
+            "releaseName": f"{slug}-cert-manager-operator",
+        },
         "labels": {
-            "name": f"{slug}-cert-manager-operator"
+            "name": f"{slug}-cert-manager-operator",
         },
         "diff": {
             "comparePatches": [
