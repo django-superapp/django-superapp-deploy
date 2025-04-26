@@ -337,7 +337,9 @@ GRANT USAGE ON SCHEMA cron TO {username};
                         "spool-path": "/pgdata/pgbackrest/pgbackrest-spool",
                         
                         # Add S3 backup configuration if enabled
-                        **({"repo2-s3-uri-style": "path",
+                        **({
+                            "repo2-path": s3_backup["path"],
+                            "repo2-s3-uri-style": "path",
                             "repo2-s3-key": s3_backup["access_key"],
                             "repo2-s3-key-secret": s3_backup["secret_key"],
                             "repo2-retention-archive": "30",
@@ -347,7 +349,8 @@ GRANT USAGE ON SCHEMA cron TO {username};
                            } if s3_backup and s3_backup.get("enabled", False) else {}),
                         
                         # Add S3 bootstrap configuration if enabled
-                        **({"repo3-path": s3_bootstrap["path"],
+                        **({
+                            "repo3-path": s3_bootstrap["path"],
                             "repo3-s3-uri-style": "path",
                             "repo3-s3-key": s3_bootstrap["access_key"],
                             "repo3-s3-key-secret": s3_bootstrap["secret_key"],
@@ -397,7 +400,6 @@ GRANT USAGE ON SCHEMA cron TO {username};
                             "bucket": s3_backup["bucket"],
                             "endpoint": s3_backup["endpoint"],
                             "region": s3_backup["region"],
-                            **({"path": s3_backup["path"]} if "path" in s3_backup else {})
                         }
                     }] if s3_backup and s3_backup.get("enabled", False) else []) +
                     # S3 bootstrap repository (if enabled)
@@ -542,7 +544,18 @@ GRANT USAGE ON SCHEMA cron TO {username};
         },
         "labels": {
             "name": f"{slug}-postgres",
-        }
+        },
+        "diff": {
+            "comparePatches": [
+                {
+                    "apiVersion": "v1",
+                    "kind": "Secret",
+                    "jsonPointers": [
+                        "/data",
+                    ]
+                },
+            ]
+        },
     }
     
     fleet_yaml = yaml.dump(fleet_config, default_flow_style=False)

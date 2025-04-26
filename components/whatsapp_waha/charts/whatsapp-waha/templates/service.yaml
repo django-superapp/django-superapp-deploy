@@ -4,6 +4,7 @@ metadata:
   name: {{ include "whatsapp-waha.fullname" . }}
   labels:
     {{- include "whatsapp-waha.labels" . | nindent 4 }}
+  namespace: {{ include "whatsapp-waha.namespace" . }}
 spec:
   type: {{ .Values.service.type }}
   ports:

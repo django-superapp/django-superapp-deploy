@@ -282,12 +282,6 @@ def generate_all_skaffolds():
     
     # WhatsApp WAHA PostgreSQL Instance
     whatsapp_db_config = whatsapp_waha_config.get('postgres_db', {})
-    whatsapp_db_name = whatsapp_db_config.get('db_name', 'whatsapp_db')
-    whatsapp_db_superuser = whatsapp_db_config.get('superuser', 'postgres')
-    whatsapp_db_superuser_password = whatsapp_db_config.get('superuser_password', 'postgres')
-    whatsapp_db_username = whatsapp_db_config.get('username', 'whatsapp_user')
-    whatsapp_db_password = whatsapp_db_config.get('password', 'whatsapp_password')
-    
     whatsapp_waha_namespace_name = "whatsapp"
 
     whatsapp_waha_namespace = create_namespace(
@@ -299,11 +293,11 @@ def generate_all_skaffolds():
     whatsapp_waha_postgres_instance = create_postgres_instance_base(
         slug="whatsapp-db",
         namespace=whatsapp_waha_namespace_name,
-        db_name=whatsapp_db_name,
-        superuser=whatsapp_db_superuser,
-        superuser_password=whatsapp_db_superuser_password,
-        username=whatsapp_db_username,
-        user_password=whatsapp_db_password,
+        db_name=whatsapp_db_config['db_name'],
+        superuser=whatsapp_db_config['superuser'],
+        superuser_password=whatsapp_db_config['superuser_password'],
+        username=whatsapp_db_config['username'],
+        user_password=whatsapp_db_config['password'],
         replicas=whatsapp_db_config.get('replicas', 1),
         storage_size=whatsapp_db_config.get('storage_size', '5Gi'),
         wal_storage_size=whatsapp_db_config.get('wal_storage_size', '1Gi'),
@@ -379,10 +373,35 @@ def generate_all_skaffolds():
     #     depends_on=["common-namespace"]
     # )
 
-    # TODO: make sure to generate skaffolds only when the component is included in components
-
     # Collect all components
     components = [
+        # Fix some limits on the host
+        increase_fs_watchers_limit,
+
+        # Cert-manager
+        cert_manager_namespace,
+        cert_manager_operator,
+
+        # MetalLB
+        metallb_namespace,
+        metallb,
+
+        # Ingress Nginx
+        ingress_nginx_namespace,
+        ingress_nginx,
+
+        # Longhorn
+        longhorn_namespace,
+        longhorn_cert_manager_issuer,
+        longhorn_cert_manager_certificate,
+        longhorn,
+
+        # Rancher
+        rancher_namespace,
+        rancher_cert_manager_issuer,
+        rancher_cert_manager_certificate,
+        rancher,
+
         # PostgreSQL Operator
         postgresql_namespace,
         postgresql_operator_crds,
