@@ -77,7 +77,7 @@ def create_metallb(
     skaffold_config = {
         "apiVersion": "skaffold/v3",
         "kind": "Config",
-        "deploy": {
+        "manifests": {
             "helm": {
                 "releases": [
                     {
@@ -92,6 +92,11 @@ def create_metallb(
                         "upgradeOnChange": True
                     }
                 ]
+            }
+        },
+        "deploy": {
+            "kubectl": {
+                "defaultNamespace": namespace
             }
         }
     }
@@ -151,24 +156,19 @@ def create_metallb(
         skaffold_config["manifests"]["rawYaml"] = [
             "./manifests/*.yaml"
         ]
-        
-        # Add kubectl deploy section for the manifests
-        if "kubectl" not in skaffold_config["deploy"]:
-            skaffold_config["deploy"]["kubectl"] = {
-                "defaultNamespace": namespace
-            }
     
     skaffold_yaml = yaml.dump(skaffold_config, default_flow_style=False)
     write(f"{output_dir}/skaffold-metallb.yaml", skaffold_yaml)
     
     # Generate fleet.yaml for dependencies
     fleet_config = {
-        "namespace": namespace,
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
         "helm": {
+            "helm": {
             "releaseName": f"{slug}-metallb",
+        },
             "chart": "./deploy/components/metallb/charts/metallb",
             "values": f"./{dir_name}/metallb-values.yaml"
         }

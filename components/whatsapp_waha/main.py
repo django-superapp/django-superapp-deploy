@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, TypedDict
 import yaml
 import base64
 
@@ -10,6 +10,28 @@ from components.base.constants import GENERATED_SKAFFOLD_TMP_DIR
 from components.base.utils import get_chart_path
 
 
+class S3StorageConfig(TypedDict, total=False):
+    """
+    Configuration for S3 storage in WhatsApp WAHA.
+    
+    Attributes:
+        region: S3 region (e.g., 'eu-west-1')
+        bucket: S3 bucket name
+        access_key_id: S3 access key
+        secret_access_key: S3 secret key
+        endpoint: S3 endpoint URL (optional, for non-AWS S3)
+        force_path_style: Whether to force path style (optional, for non-AWS S3)
+        proxy_files: Whether to proxy media files through WAHA (optional, default False)
+    """
+    region: str
+    bucket: str
+    access_key_id: str
+    secret_access_key: str
+    endpoint: Optional[str]
+    force_path_style: Optional[bool]
+    proxy_files: Optional[bool]
+
+
 def create_whatsapp_waha(
     slug: str,
     namespace: str,
@@ -17,6 +39,8 @@ def create_whatsapp_waha(
     image_tag: str = "latest",
     replicas: int = 1,
     env_vars: Optional[Dict[str, str]] = None,
+    postgres_uri: Optional[str] = None,
+    s3_storage: Optional[S3StorageConfig] = None,
     ingress_enabled: bool = False,
     ingress_host: Optional[str] = None,
     ingress_class_name: str = "nginx",
@@ -37,6 +61,8 @@ def create_whatsapp_waha(
         image_tag: Docker image tag for WAHA
         replicas: Number of replicas to deploy
         env_vars: Environment variables to pass to the container
+        postgres_uri: PostgreSQL connection URI for session storage
+        s3_storage: S3StorageConfig with S3 storage configuration
         ingress_enabled: Whether to enable ingress
         ingress_host: Hostname for the ingress
         ingress_class_name: Ingress class name
@@ -65,6 +91,38 @@ def create_whatsapp_waha(
     # Generate basic auth secret name
     basic_auth_secret = f"{slug}-basic-auth"
     
+    # Prepare environment variables
+    environment_vars = env_vars or {}
+    
+    # Add PostgreSQL configuration if provided
+    if postgres_uri:
+        environment_vars["WHATSAPP_SESSIONS_POSTGRESQL_URL"] = postgres_uri
+    
+    # Add S3 storage configuration if provided
+    if s3_storage:
+        environment_vars["WAHA_MEDIA_STORAGE"] = "S3"
+        
+        if "region" in s3_storage:
+            environment_vars["WAHA_S3_REGION"] = s3_storage["region"]
+        
+        if "bucket" in s3_storage:
+            environment_vars["WAHA_S3_BUCKET"] = s3_storage["bucket"]
+        
+        if "access_key_id" in s3_storage:
+            environment_vars["WAHA_S3_ACCESS_KEY_ID"] = s3_storage["access_key_id"]
+        
+        if "secret_access_key" in s3_storage:
+            environment_vars["WAHA_S3_SECRET_ACCESS_KEY"] = s3_storage["secret_access_key"]
+        
+        if "endpoint" in s3_storage:
+            environment_vars["WAHA_S3_ENDPOINT"] = s3_storage["endpoint"]
+        
+        if "force_path_style" in s3_storage:
+            environment_vars["WAHA_S3_FORCE_PATH_STYLE"] = str(s3_storage["force_path_style"])
+        
+        if "proxy_files" in s3_storage:
+            environment_vars["WAHA_S3_PROXY_FILES"] = str(s3_storage["proxy_files"])
+    
     # Generate Helm values
     helm_values = {
         "nameOverride": slug,
@@ -78,7 +136,7 @@ def create_whatsapp_waha(
             "port": 80,
             "targetPort": 3000
         },
-        "env": env_vars or {},
+        "env": environment_vars,
         "ingress": {
             "enabled": ingress_enabled,
             "className": ingress_class_name
@@ -146,7 +204,7 @@ def create_whatsapp_waha(
     skaffold_config = {
         "apiVersion": "skaffold/v3",
         "kind": "Config",
-        "deploy": {
+        "manifests": {
             "helm": {
                 "releases": [
                     {
@@ -162,8 +220,6 @@ def create_whatsapp_waha(
                     }
                 ],
             },
-        },
-        "manifests": {
             "rawYaml": [
                 f"./manifests/basic-auth-secret.yaml",
             ],
@@ -175,12 +231,14 @@ def create_whatsapp_waha(
 
     # Generate fleet.yaml for dependencies
     fleet_config = {
-        "namespace": namespace,
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
+        "helm": {
+            "releaseName": f"{slug}-whatsapp-waha",
+        },
         "labels": {
-            "name": f"{slug}-registry"
+            "name": f"{slug}-whatsapp-waha"
         }
     }
 

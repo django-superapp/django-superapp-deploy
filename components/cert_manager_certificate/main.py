@@ -4,13 +4,12 @@ Certificate Manager Certificate Component
 This module provides functionality to create a cert-manager certificate
 resource for TLS certificates.
 """
-from typing import Any, List, Optional
-import os
+from typing import List, Optional
 
-import yaml
 from ilio import write
+from .component_types import CertificateComponent
 
-from ..base.component_types import Component, CertificateComponent
+from ..base.component_types import Component
 from ..base.constants import *
 
 
@@ -53,7 +52,6 @@ def create_cert_manager_certificate(
             "labels": {
                 "app.kubernetes.io/name": f"{slug}-certificate",
                 "app.kubernetes.io/instance": slug,
-                "app.kubernetes.io/managed-by": "skaffold"
             }
         },
         "spec": {
@@ -88,10 +86,12 @@ def create_cert_manager_certificate(
     
     # Generate Fleet configuration
     fleet_config = {
-        "namespace": namespace,
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
+        "helm": {
+            "releaseName": f"{slug}-certificates",
+        },
         "labels": {
             "name": f"{slug}-certificates"
         },

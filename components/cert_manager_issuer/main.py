@@ -4,13 +4,12 @@ Certificate Manager Issuer Component
 This module provides functionality to create a cert-manager issuer
 for DNS01 validation using Cloudflare.
 """
-from typing import Any, List, Optional
-import os
+from typing import List, Optional
 
-import yaml
 from ilio import write
+from .component_types import IssuerComponent
 
-from ..base.component_types import Component, IssuerComponent
+from ..base.component_types import Component
 from ..base.constants import *
 
 
@@ -51,7 +50,6 @@ def create_cert_manager_issuer(
             "labels": {
                 "app.kubernetes.io/name": f"{slug}-certificate-cloudflare",
                 "app.kubernetes.io/instance": slug,
-                "app.kubernetes.io/managed-by": "skaffold"
             }
         },
         "type": "Opaque",
@@ -71,7 +69,6 @@ def create_cert_manager_issuer(
             "labels": {
                 "app.kubernetes.io/name": f"{slug}-letsencrypt",
                 "app.kubernetes.io/instance": slug,
-                "app.kubernetes.io/managed-by": "skaffold"
             }
         },
         "spec": {
@@ -117,12 +114,16 @@ def create_cert_manager_issuer(
     
     # Generate Fleet configuration
     fleet_config = {
-        "namespace": namespace,
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
+        "helm": {
+            "helm": {
+            "releaseName": f"{slug}-certificates",
+        },
+        },
         "labels": {
-            "name": f"{slug}-certificates"
+            "name": f"{slug}-certificates",
         },
         "diff": {
             "comparePatches": [

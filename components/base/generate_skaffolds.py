@@ -1,5 +1,6 @@
 import glob
-from typing import List
+import os
+from typing import List, Optional
 
 from ilio import write
 
@@ -32,7 +33,9 @@ def generate_skaffolds(components: List[Component]):
         global_skaffold_paths.append({
             "path": f"{dir_name}/skaffold.yaml"
         })
-    write(f"{GENERATED_SKAFFOLD_TMP_DIR}/skaffold--main--all.yaml", yaml.dump({
+    # Determine the output path for the main skaffold file
+    main_skaffold_dir = GENERATED_SKAFFOLD_TMP_DIR
+    write(f"{main_skaffold_dir}/skaffold--main--all.yaml", yaml.dump({
         "apiVersion": "skaffold/v3",
         "kind": "Config",
         "requires": global_skaffold_paths,

@@ -196,8 +196,11 @@ def generate_disk_setup_daemonset(slug: str, namespace: str, disks: List[Longhor
         "metadata": {
             "name": f"{slug}-disk-setup",
             "namespace": namespace,
+            "helm": {
+            "releaseName": f"{slug}-disk-setup",
+        },
             "labels": {
-                "app": f"{slug}-disk-setup"
+                "app": f"{slug}-disk-setup",
             }
         },
         "spec": {
@@ -570,12 +573,14 @@ def create_longhorn(
     
     # Generate Fleet configuration
     fleet_config = {
-        "namespace": namespace,
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
+        "helm": {
+            "releaseName": f"{slug}-longhorn",
+        },
         "labels": {
-            "name": f"{slug}-longhorn"
+            "name": f"{slug}-longhorn",
         },
         "diff": {
             "comparePatches": [
