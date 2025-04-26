@@ -1,7 +1,5 @@
 _answers_relpath: ".copier-answers.yml"
-rsync_exclude:
-  - .github
-  - ".git"
+_rsync_exclude:
   - "!environments/sample_environment/"
   - "!environments/sample_environment/secrets/"
   - "!environments/sample_environment/secrets/config_env.yaml.example"
@@ -12,4 +10,8 @@ rsync_exclude:
   - "!environments/sample_environment/main.py"
   - "!environments/sample_environment/Makefile"
   - "environments/**"
+_exclude:
+  - .github
+  - ".git"
   - ".idea"
+
