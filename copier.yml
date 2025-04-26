@@ -1,5 +1,5 @@
 _answers_relpath: ".copier-answers.yml"
-_exclude:
+rsync_exclude:
   - .github
   - ".git"
   - "!environments/sample_environment/"
