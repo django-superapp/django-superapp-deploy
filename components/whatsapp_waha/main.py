@@ -2,6 +2,7 @@ import os
 from typing import Dict, List, Optional, Any, TypedDict
 import yaml
 import base64
+import bcrypt
 
 from ilio import write
 
@@ -178,8 +179,11 @@ def create_whatsapp_waha(
 
     # Create basic auth secret if enabled
     if basic_auth_enabled and username and password:
+        # Hash the password using bcrypt (compatible with nginx basic auth)
+        hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        
         # Create htpasswd-like string: username:hashed_password
-        auth_string = f"{username}:{password}"
+        auth_string = f"{username}:{hashed_password}"
         auth_base64 = base64.b64encode(auth_string.encode()).decode()
         
         # Create secret manifest
