@@ -164,9 +164,9 @@ def create_example_component(
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
-       # "helm": {
-       #      "releaseName": f"{slug}-example",
-       #  },
+       "helm": {
+            "releaseName": f"{slug}-example",
+        },
         "labels": {
             "name": f"{slug}-example"
         }
