@@ -45,17 +45,17 @@ def generate_all_skaffolds():
     # Clean up and create temporary directory
     shutil.rmtree(f"{GENERATED_SKAFFOLD_TMP_DIR}", ignore_errors=True)
     os.makedirs(f'{GENERATED_SKAFFOLD_TMP_DIR}', exist_ok=True)
-    
+
     # Create an empty .gitkeep file
     with open(f'{GENERATED_SKAFFOLD_TMP_DIR}/.gitkeep', 'w') as f:
         f.write("")
-    
+
     # Load secrets
     # Load configuration from YAML
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     env_vars = config.get('env', {})
-    
+
     # Core infrastructure
     increase_fs_watchers_limit = create_increase_fs_watchers_limit(
         slug="increase-fs-watchers-limit",
@@ -148,14 +148,14 @@ def generate_all_skaffolds():
     )
     # Get disk configurations from config
     longhorn_disks = longhorn_config.get('LONGHORN_DISKS', [])
-    
+
     # Ensure each disk has the correct node selector format
     for disk in longhorn_disks:
         if 'node_selector' not in disk and 'kubernetes.io/hostname' not in disk.get('node_selector', {}):
             # If node name is specified but not in the correct format, fix it
             if 'node' in disk:
                 disk['node_selector'] = {'kubernetes.io/hostname': disk['node']}
-    
+
     # Define storage classes for different performance tiers
     longhorn_storage_classes = [
         {
@@ -183,7 +183,7 @@ def generate_all_skaffolds():
             "fs_type": "ext4"
         }
     ]
-    
+
     longhorn = create_longhorn(
         slug="longhorn",
         namespace="longhorn-system",
@@ -395,16 +395,16 @@ def generate_all_skaffolds():
         whatsapp_waha_postgres_instance,
         whatsapp_waha,
     ]
-    
+
     # Generate skaffold configurations
     generate_skaffolds(
         components=components,
     )
-    
+
     # Generate IntelliJ run configurations if enabled
     if INTELLIJ_RUN_CONFIGURATIONS_ENABLED or env_vars['INTELLIJ_RUN_CONFIGURATIONS_ENABLED'].lower() == 'true':
         generate_intelij_skaffolds_run_configurations()
-    
+
     # Sync generated files to the final directory
     subprocess.call(["rsync", "-rcvu", "--delete", f"{GENERATED_SKAFFOLD_TMP_DIR}/", f"{GENERATED_SKAFFOLD_DIR}/"])
     subprocess.call(["rm", "-rf", f"{GENERATED_SKAFFOLD_TMP_DIR}/"])
