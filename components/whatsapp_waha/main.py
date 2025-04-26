@@ -224,6 +224,11 @@ def create_whatsapp_waha(
                 f"./manifests/basic-auth-secret.yaml",
             ],
         },
+        "deploy": {
+            "kubectl": {
+                "defaultNamespace": namespace,
+            },
+        },
     }
 
     skaffold_yaml = yaml.dump(skaffold_config, default_flow_style=False)
