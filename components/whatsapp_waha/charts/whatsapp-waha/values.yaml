@@ -76,3 +76,16 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+# Persistence configuration for WhatsApp sessions and media
+persistence:
+  # Sessions volume configuration
+  sessions:
+    enabled: true
+    size: "1Gi"
+    storageClass: ""
+  # Media volume configuration
+  media:
+    enabled: true
+    size: "10Gi"
+    storageClass: ""

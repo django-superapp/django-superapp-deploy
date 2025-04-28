@@ -50,6 +50,10 @@ def create_whatsapp_waha(
     username: Optional[str] = None,
     password: Optional[str] = None,
     basic_auth_realm: str = "Authentication Required",
+    persistence_enabled: bool = True,
+    sessions_volume_size: str = "10Gi",
+    media_volume_size: str = "20Gi",
+    storage_class: str = "",
     depends_on: Optional[List[Component]] = None
 ) -> Component:
     """
@@ -72,6 +76,10 @@ def create_whatsapp_waha(
         username: Username for basic auth (required if basic_auth_enabled is True)
         password: Password for basic auth (required if basic_auth_enabled is True)
         basic_auth_realm: Realm for basic auth
+        persistence_enabled: Whether to enable persistent volumes for sessions and media
+        sessions_volume_size: Size of the sessions volume (e.g., "1Gi")
+        media_volume_size: Size of the media volume (e.g., "10Gi")
+        storage_class: Storage class to use for persistent volumes
         depends_on: List of dependencies for Fleet
         
     Returns:
@@ -146,6 +154,18 @@ def create_whatsapp_waha(
             "enabled": basic_auth_enabled,
             "secretName": basic_auth_secret,
             "realm": basic_auth_realm
+        },
+        "persistence": {
+            "sessions": {
+                "enabled": persistence_enabled,
+                "size": sessions_volume_size,
+                "storageClass": storage_class
+            },
+            "media": {
+                "enabled": persistence_enabled,
+                "size": media_volume_size,
+                "storageClass": storage_class
+            }
         }
     }
     
