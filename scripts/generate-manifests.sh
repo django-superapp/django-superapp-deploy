@@ -130,7 +130,7 @@ for d in */ ; do
         yq eval --inplace 'del(. | select(. == null or . == ""))' manifests.yaml || handle_error "$d" "yq delete empty elements"
 
         echo "Adding namespace value in each manifest file..";
-        yq eval --inplace "select(.metadata.namespace == null and (.kind != \"CustomResourceDefinition\" and .kind != \"MutatingWebhookConfiguration\" and .kind != \"ValidatingWebhookConfiguration\" and .kind != \"ClusterRoleBinding\" and .kind != \"Namespace\")) |= .metadata.namespace = \"$NS\"" manifests.yaml || handle_error "$d" "yq add namespace"
+        yq eval --inplace "select(.metadata.namespace == \"\" and .kind != \"CustomResourceDefinition\" and .kind != \"MutatingWebhookConfiguration\" and .kind != \"ValidatingWebhookConfiguration\" and .kind != \"ClusterRoleBinding\" and .kind != \"Namespace\" and \"$NS\" != \"\") |= .metadata.namespace = \"$NS\"" manifests.yaml || handle_error "$d" "yq add namespace"
         sync;
 
         echo "Creating manifests subdirectories..";

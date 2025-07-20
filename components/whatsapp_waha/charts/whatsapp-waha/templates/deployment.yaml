@@ -14,8 +14,6 @@ spec:
     metadata:
       labels:
         {{- include "whatsapp-waha.selectorLabels" . | nindent 8 }}
-      annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -39,17 +37,6 @@ spec:
                 name: {{ include "whatsapp-waha.fullname" . }}-env
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if or .Values.persistence.sessions.enabled .Values.persistence.media.enabled }}
-          volumeMounts:
-            {{- if .Values.persistence.sessions.enabled }}
-            - name: {{ include "whatsapp-waha.fullname" . }}-sessions
-              mountPath: /app/.sessions
-            {{- end }}
-            {{- if .Values.persistence.media.enabled }}
-            - name: {{ include "whatsapp-waha.fullname" . }}-media
-              mountPath: /app/.media
-            {{- end }}
-          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -61,17 +48,4 @@ spec:
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- if or .Values.persistence.sessions.enabled .Values.persistence.media.enabled }}
-      volumes:
-        {{- if .Values.persistence.sessions.enabled }}
-        - name: {{ include "whatsapp-waha.fullname" . }}-sessions
-          persistentVolumeClaim:
-            claimName: {{ include "whatsapp-waha.fullname" . }}-sessions-pvc
-        {{- end }}
-        {{- if .Values.persistence.media.enabled }}
-        - name: {{ include "whatsapp-waha.fullname" . }}-media
-          persistentVolumeClaim:
-            claimName: {{ include "whatsapp-waha.fullname" . }}-media-pvc
-        {{- end }}
       {{- end }}

@@ -16,6 +16,7 @@ bash "$SKAFFOLD_ROOT_DIR/scripts/generate-skaffolds.sh";
 #cd "$(dirname $path)" || exit;
 
 skaffold run \
+  --force=false  \
   --cleanup=false  \
   --port-forward=false \
   --wait-for-deletions-max=2m0s \

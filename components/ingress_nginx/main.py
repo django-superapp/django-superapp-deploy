@@ -19,17 +19,18 @@ def create_ingress_nginx(
         slug: str,
         namespace: str = 'ingress-nginx',
         metallb_address_pool: Optional[str] = None,
+        replicas: int = 3,
         depends_on: Optional[List[Component]] = None
 ) -> Component:
     """
     Deploy the NGINX ingress controller using Helm.
-    
+
     Args:
         slug: Unique identifier for the deployment
         namespace: Kubernetes namespace to deploy the ingress controller
         metallb_address_pool: MetalLB address pool to use for the LoadBalancer service
         depends_on: List of dependencies for Fleet
-        
+
     Returns:
         Directory name where the configuration is generated
     """
@@ -41,6 +42,7 @@ def create_ingress_nginx(
     # Generate Helm values for ingress-nginx
     ingress_nginx_values = {
         "controller": {
+            "replicaCount": replicas,
             "ingressClassResource": {
                 "name": "nginx",
                 "enabled": True,
@@ -48,16 +50,42 @@ def create_ingress_nginx(
             },
             "service": {
                 "type": "LoadBalancer",
-                "externalTrafficPolicy": "Local",
+                # "externalTrafficPolicy": "Local",
                 "annotations": {
                     "metallb.universe.tf/address-pool": metallb_address_pool
                 } if metallb_address_pool else {},
             },
             "config": {
-                "use-forwarded-headers": "true",
-                "compute-full-forwarded-for": "true",
-                "use-proxy-protocol": "false",
+                # "log-level": "debug",
+                # "error-log-level": "debug",
+                # "use-forwarded-headers": "false",
+                # "compute-full-forwarded-for": "true",
+                # "use-proxy-protocol": "false",
+
+                # Enable compression
+                "use-gzip": "true",
+                "gzip-level": "6",
+                "gzip-types": "application/atom+xml application/javascript application/x-javascript application/json application/rss+xml application/vnd.ms-fontobject application/x-font-ttf application/x-web-app-manifest+json application/xhtml+xml application/xml font/opentype image/svg+xml image/x-icon text/css text/javascript text/plain text/x-component",
+
+                # Enable brotli compression
+                "use-brotli": "true",
+                "brotli-level": "6",
+                "brotli-types": "application/atom+xml application/javascript application/x-javascript application/json application/rss+xml application/vnd.ms-fontobject application/x-font-ttf application/x-web-app-manifest+json application/xhtml+xml application/xml font/opentype image/svg+xml image/x-icon text/css text/javascript text/plain text/x-component",
+
+                # Enable zstd compression
+                "use-zstd": "true",
+                "zstd-level": "3",
+                "zstd-types": "application/atom+xml application/javascript application/x-javascript application/json application/rss+xml application/vnd.ms-fontobject application/x-font-ttf application/x-web-app-manifest+json application/xhtml+xml application/xml font/opentype image/svg+xml image/x-icon text/css text/javascript text/plain text/x-component",
+
+                # Enable HTTP/2
+                "use-http2": "true",
+
+                # Enable HTTP/3
+                "use-http3": "true",
             },
+            # "extraArgs": {
+            #     "v": 5,
+            # },
             "resources": {
                 "requests": {
                     "cpu": "100m",
@@ -83,7 +111,7 @@ def create_ingress_nginx(
             },
         }
     }
-    
+
     # Generate Skaffold configuration
     skaffold_config = {
         "apiVersion": "skaffold/v3",
@@ -113,7 +141,7 @@ def create_ingress_nginx(
             },
         },
     }
-    
+
     # Generate Fleet configuration
     fleet_config = {
         "dependsOn": [
@@ -129,13 +157,13 @@ def create_ingress_nginx(
     }
 
     # Write all configuration files
-    write(f"{output_dir}/ingress-nginx-values.yaml", 
+    write(f"{output_dir}/ingress-nginx-values.yaml",
           yaml.dump(ingress_nginx_values, default_flow_style=False))
-    
-    write(f"{output_dir}/skaffold-ingress-nginx.yaml", 
+
+    write(f"{output_dir}/skaffold-ingress-nginx.yaml",
           yaml.dump(skaffold_config, default_flow_style=False))
-    
-    write(f"{output_dir}/fleet.yaml", 
+
+    write(f"{output_dir}/fleet.yaml",
           yaml.dump(fleet_config, default_flow_style=False))
 
     return Component(

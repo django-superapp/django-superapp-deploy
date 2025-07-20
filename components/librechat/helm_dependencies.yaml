@@ -1,0 +1,5 @@
+repositories:
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+  - name: meilisearch-kubernetes
+    url: https://meilisearch.github.io/meilisearch-kubernetes

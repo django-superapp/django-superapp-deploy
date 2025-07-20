@@ -10,17 +10,32 @@ sudo mkdir -p /etc/rancher/rke2/
 sudo cat > /etc/rancher/rke2/config.yaml << EOF
 disable:
   - rke2-ingress-nginx
+kubelet-arg:
+  - "max-pods=200"
 EOF
 ```
 
-2. **Install and start RKE2 server**:
+2. Install required packages for longhorn:
+```bash
+apt-get install -y nfs-common cryptsetup dmsetup open-iscsi
+```
+
+3. Disable multipathd
+```bash
+sudo systemctl stop multipathd.socket
+sudo systemctl stop multipath-tools multipathd
+sudo systemctl disable multipath-tools multipathd
+reboot
+```
+
+4. **Install and start RKE2 server**:
    ```bash
    curl -sfL https://get.rke2.io | sudo sh -
    sudo systemctl enable rke2-server.service
    sudo systemctl start rke2-server.service
    ```
 
-3. **Get node token** (needed for adding worker nodes):
+5. **Get node token** (needed for adding worker nodes):
    ```bash
    cat /var/lib/rancher/rke2/server/node-token
    ```
@@ -29,7 +44,7 @@ EOF
 
 1. **Install RKE2 agent**:
    ```bash
-   curl -sfL https://get.rke2.io | INSTALL_RKE2_TYPE="agent" sh -
+   curl -sfL https://get.rke2.io | sh -
    ```
 
 2. **Configure agent**:
@@ -43,8 +58,8 @@ EOF
 
 3. **Start agent**:
    ```bash
-   sudo systemctl enable rke2-agent.service
-   sudo systemctl start rke2-agent.service
+   sudo systemctl enable rke2-server.service
+   sudo systemctl start rke2-server.service
    ```
 
 ## Access Cluster

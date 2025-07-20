@@ -4,11 +4,8 @@ Certificate Manager Operator Component
 This module provides functionality to deploy the cert-manager operator
 which handles certificate issuance and management in Kubernetes.
 """
-from importlib.metadata import requires
-from typing import Any, List, Optional
-import os
 
-import yaml
+from typing import List, Optional
 from ilio import write
 
 from ..base.component_types import Component

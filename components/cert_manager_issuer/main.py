@@ -118,9 +118,7 @@ def create_cert_manager_issuer(
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
         "helm": {
-            "helm": {
             "releaseName": f"{slug}-certificates",
-        },
         },
         "labels": {
             "name": f"{slug}-certificates",
