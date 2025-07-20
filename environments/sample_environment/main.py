@@ -31,11 +31,12 @@ from components.namespace.main import create_namespace
 from components.cert_manager_issuer.main import create_cert_manager_issuer
 from components.cert_manager_certificate.main import create_cert_manager_certificate
 from components.rancher.main import create_rancher
-from components.ingress_nginx.main import create_ingress_nginx
+from components.rke2_ingress_nginx.main import create_ingress_nginx
 from components.longhorn.main import create_longhorn
 from components.increase_fs_watchers_limit.main import create_increase_fs_watchers_limit
 from components.intellij_skaffolds_run_configurations.main import generate_intelij_skaffolds_run_configurations
 from components.metallb.main import create_metallb
+from components.cloudflare_tunnel.main import create_cloudflare_tunnel
 
 
 # ===== MAIN GENERATION FUNCTION =====
@@ -373,6 +374,28 @@ def generate_all_skaffolds():
     #     depends_on=["common-namespace"]
     # )
 
+    # Cloudflare Tunnel
+    cloudflare_tunnel_config = config['components'].get('cloudflare_tunnel', {})
+    cloudflare_tunnel_namespace_name = cloudflare_tunnel_config.get('namespace', 'cloudflare-tunnel')
+    cloudflare_tunnel_namespace = create_namespace(
+        slug="cloudflare-tunnel",
+        namespace=cloudflare_tunnel_namespace_name,
+        depends_on=[]
+    )
+
+    cloudflare_tunnel = create_cloudflare_tunnel(
+        slug="cloudflare-tunnel",
+        namespace=cloudflare_tunnel_namespace_name,
+        token=cloudflare_tunnel_config['token'],
+        replicas=cloudflare_tunnel_config.get('replicas', 2),
+        image_repository=cloudflare_tunnel_config.get('image_repository', 'cloudflare/cloudflared'),
+        image_tag=cloudflare_tunnel_config.get('image_tag', 'latest'),
+        env_vars=cloudflare_tunnel_config.get('env_vars', {}),
+        depends_on=[
+            cloudflare_tunnel_namespace,
+        ]
+    )
+
     # Collect all components
     components = [
         # Fix some limits on the host
@@ -402,6 +425,10 @@ def generate_all_skaffolds():
         rancher_cert_manager_certificate,
         rancher,
 
+        # Cloudflare tunnel
+        cloudflare_tunnel_namespace,
+        cloudflare_tunnel,
+
         # PostgreSQL Operator
         postgresql_namespace,
         postgresql_operator_crds,
@@ -413,6 +440,7 @@ def generate_all_skaffolds():
         whatsapp_waha_cert_manager_certificate,
         whatsapp_waha_postgres_instance,
         whatsapp_waha,
+
     ]
 
     # Generate skaffold configurations

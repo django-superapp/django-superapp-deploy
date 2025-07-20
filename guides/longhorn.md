@@ -97,46 +97,175 @@ kubectl -n longhorn-system logs <pod-name> -c disk-setup-init
 If you need to completely remove LVM configuration from a disk and start fresh (run this on the host node, not in the container):
 
 ```bash
-# Replace disk_id with your actual disk ID (e.g., nvme-Samsung_SSD_980_PRO_2TB_S69ENF0WB76932R)
-DISK_ID="your-disk-id"
-DISK_PATH="/dev/disk/by-id/$DISK_ID"
+# Function to clean up LVM partitions and format disk
+cleanup_disk() {
+  local DISK_ID="$1"
+  
+  if [ -z "$DISK_ID" ]; then
+    echo "Error: Disk ID is required"
+    echo "Usage: cleanup_disk <disk-id>"
+    return 1
+  fi
+  
+  local DISK_PATH="/dev/disk/by-id/$DISK_ID"
+  
+  if [ ! -e "$DISK_PATH" ]; then
+    echo "Error: Disk $DISK_PATH does not exist"
+    return 1
+  fi
+  
+  echo "Starting safe cleanup of disk: $DISK_PATH"
+  echo "WARNING: This will destroy all data on the disk!"
+  
+  # 1. Find the volume group name that uses this disk
+  echo "Finding LVM volume groups using disk $DISK_PATH"
+  VG_NAME=$(pvs --noheadings -o vg_name $DISK_PATH 2>/dev/null | tr -d ' ')
+  
+  if [ -n "$VG_NAME" ]; then
+    echo "Found volume group: $VG_NAME"
+    
+    # 2. Safely unmount all logical volumes in this VG
+    echo "Unmounting logical volumes in volume group $VG_NAME"
+    lvs --noheadings -o lv_path $VG_NAME 2>/dev/null | while read LV_PATH; do
+      if [ -n "$LV_PATH" ]; then
+        # Check if mounted and unmount gracefully first, then force if needed
+        if mount | grep -q "$LV_PATH"; then
+          echo "Unmounting $LV_PATH"
+          umount "$LV_PATH" 2>/dev/null || umount -l "$LV_PATH" 2>/dev/null || echo "Warning: Could not unmount $LV_PATH"
+        fi
+      fi
+    done
+    
+    # Wait for unmounts to complete
+    sleep 3
+    
+    # 3. Remove entries from /etc/fstab
+    echo "Removing disk entries from /etc/fstab"
+    cp /etc/fstab /etc/fstab.backup.$(date +%Y%m%d_%H%M%S)
+    grep -v "$DISK_PATH" /etc/fstab > /tmp/fstab.tmp && mv /tmp/fstab.tmp /etc/fstab
+    grep -v "/dev/$VG_NAME/" /etc/fstab > /tmp/fstab.tmp && mv /tmp/fstab.tmp /etc/fstab 2>/dev/null || true
+    grep -v "/dev/mapper/$VG_NAME" /etc/fstab > /tmp/fstab.tmp && mv /tmp/fstab.tmp /etc/fstab 2>/dev/null || true
+    
+    # 4. Deactivate logical volumes
+    echo "Deactivating logical volumes in $VG_NAME"
+    lvchange -an $VG_NAME 2>/dev/null || echo "Warning: Could not deactivate all LVs"
+    
+    # 5. Remove logical volumes
+    echo "Removing logical volumes in $VG_NAME"
+    lvs --noheadings -o lv_name $VG_NAME 2>/dev/null | while read LV_NAME; do
+      if [ -n "$LV_NAME" ]; then
+        echo "Removing LV: $VG_NAME/$LV_NAME"
+        lvremove -f "$VG_NAME/$LV_NAME" 2>/dev/null || echo "Warning: Could not remove $VG_NAME/$LV_NAME"
+      fi
+    done
+    
+    # 6. Remove volume group
+    echo "Removing volume group $VG_NAME"
+    vgremove -f "$VG_NAME" 2>/dev/null || echo "Warning: Could not remove VG $VG_NAME"
+    
+    # 7. Remove physical volume
+    echo "Removing physical volume $DISK_PATH"
+    pvremove -f "$DISK_PATH" 2>/dev/null || echo "Warning: Could not remove PV $DISK_PATH"
+    
+  else
+    echo "No LVM volume groups found on disk $DISK_PATH"
+    
+    # Handle non-LVM partitions
+    echo "Unmounting any regular partitions from disk $DISK_PATH"
+    mount | grep "$DISK_PATH" | awk '{print $1}' | while read PARTITION; do
+      echo "Unmounting $PARTITION"
+      umount "$PARTITION" 2>/dev/null || echo "Warning: Could not unmount $PARTITION"
+    done
+    
+    # Remove from fstab
+    echo "Removing disk entries from /etc/fstab"
+    cp /etc/fstab /etc/fstab.backup.$(date +%Y%m%d_%H%M%S)
+    grep -v "$DISK_PATH" /etc/fstab > /tmp/fstab.tmp && mv /tmp/fstab.tmp /etc/fstab
+  fi
+  
+  # 8. Wait for operations to complete
+  echo "Waiting for operations to complete..."
+  sleep 5
+  
+  # 9. Wipe disk signatures
+  echo "Wiping disk signatures on $DISK_PATH"
+  wipefs -a "$DISK_PATH" 2>/dev/null || echo "Warning: Could not wipe all signatures"
+  
+  # 10. Zero out beginning of disk
+  echo "Zeroing beginning of disk $DISK_PATH"
+  dd if=/dev/zero of="$DISK_PATH" bs=1M count=10 2>/dev/null || echo "Warning: Could not zero disk"
+  
+  # 11. Safe system refresh
+  echo "Refreshing system state (safe mode)"
+  
+  # Sync filesystems
+  sync
+  
+  # Reload systemd
+  systemctl daemon-reload
+  
+  # Gentle udev refresh
+  udevadm settle
+  udevadm trigger --subsystem-match=block
+  udevadm settle
+  
+  # Safe LVM refresh
+  if command -v pvscan >/dev/null 2>&1; then
+    pvscan --cache 2>/dev/null || echo "Warning: pvscan failed"
+  fi
+  
+  # Gentle partition table refresh
+  partprobe "$DISK_PATH" 2>/dev/null || echo "Warning: partprobe failed"
+  
+  echo "Disk $DISK_PATH cleanup completed safely"
+  echo "Please run 'lsblk' to verify the disk state"
+  echo "If lsblk shows I/O errors, a system reboot may be required"
+}
 
-# 1. Find the volume group name that uses this disk
-VG_NAME=$(pvs --noheadings -o vg_name $DISK_PATH 2>/dev/null | tr -d ' ')
-
-if [ -n "$VG_NAME" ]; then
-  # 2. Deactivate any logical volumes in this volume group
-  echo "Deactivating logical volumes in $VG_NAME"
-  lvchange -an $VG_NAME
-
-  # 3. Remove all logical volumes in this volume group
-  echo "Removing logical volumes in $VG_NAME"
-  lvs --noheadings -o lv_name $VG_NAME | while read LV_NAME; do
-    lvremove -f $VG_NAME/$LV_NAME
-  done
-
-  # 4. Remove the volume group
-  echo "Removing volume group $VG_NAME"
-  vgremove -f $VG_NAME
-
-  # 5. Remove the physical volume
-  echo "Removing physical volume $DISK_PATH"
-  pvremove -f $DISK_PATH
-fi
-
-# 6. Wipe the disk completely (WARNING: This will destroy all data on the disk)
-echo "Wiping disk $DISK_PATH"
-# First unmount any mounted partitions from this disk
-mount | grep "$DISK_PATH" | awk '{print $1}' | xargs -I{} umount {} 2>/dev/null
-# Try to wipe signatures, but don't fail if device is busy
-wipefs -a $DISK_PATH || echo "Warning: Could not wipe all signatures, disk may be in use"
-
-# 7. Create a new partition table (optional)
-echo "Creating new partition table on $DISK_PATH"
-# Use dd to zero out the first few MB of the disk (will clear partition table)
-dd if=/dev/zero of=$DISK_PATH bs=1M count=10
-
-echo "Disk $DISK_PATH has been completely wiped and LVM configuration removed"
+# Example usage:
+# cleanup_disk "nvme-Samsung_SSD_980_PRO_2TB_S69ENF0WB76932R"
 ```
 
 ⚠️ **WARNING**: This script will completely erase all data on the specified disk. Use with extreme caution, especially in production environments.
+
+### Recovery from I/O Errors
+
+If you encounter "Input/output error" from `lsblk` after running the cleanup script, this means the kernel's block device subsystem has been corrupted. Here are recovery steps:
+
+1. **Immediate Recovery (try first):**
+   ```bash
+   # Reload block device subsystem
+   echo 1 > /sys/block/$(basename $DISK_PATH)/device/rescan 2>/dev/null || true
+   
+   # Force reload of all block devices
+   for device in /sys/block/*/device/rescan; do
+     echo 1 > "$device" 2>/dev/null || true
+   done
+   
+   # Wait and try lsblk again
+   sleep 5
+   lsblk
+   ```
+
+2. **If step 1 fails, reload kernel modules:**
+   ```bash
+   # Reload LVM modules
+   modprobe -r dm_mod 2>/dev/null || true
+   modprobe dm_mod
+   
+   # Reload block device modules
+   modprobe -r sd_mod 2>/dev/null || true
+   modprobe sd_mod
+   
+   # Wait and try lsblk again
+   sleep 5
+   lsblk
+   ```
+
+3. **If steps 1-2 fail, reboot the system:**
+   ```bash
+   # This will cleanly restart the kernel and fix all I/O errors
+   reboot
+   ```
+
+**Prevention**: The updated cleanup function above uses safer operations to prevent I/O errors. Always use the latest version of the function.

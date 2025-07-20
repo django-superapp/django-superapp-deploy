@@ -1,0 +1,17 @@
+# Default values for cloudflare-tunnel
+nameOverride: ""
+namespace: default
+fullnameOverride: ""
+
+image:
+  repository: cloudflare/cloudflared
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicas: 2
+
+# Token will be mounted from a secret
+token: ""
+
+# Additional environment variables
+envVars: {}

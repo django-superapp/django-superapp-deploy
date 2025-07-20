@@ -1,7 +1,5 @@
-import os
 from typing import Any, Dict, List, Optional
 
-import yaml
 from ilio import write
 
 from ..base.component_types import Component
@@ -65,7 +63,10 @@ def create_metallb(
                     "memory": "50Mi"
                 }
             },
-            "tolerateMaster": True
+            "tolerateMaster": True,
+            "frr": {
+                "enabled": False,
+            }
         }
     }
     
@@ -166,9 +167,6 @@ def create_metallb(
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
         "helm": {
-            "helm": {
-            "releaseName": f"{slug}-metallb",
-        },
             "chart": "./deploy/components/metallb/charts/metallb",
             "values": f"./{dir_name}/metallb-values.yaml"
         }

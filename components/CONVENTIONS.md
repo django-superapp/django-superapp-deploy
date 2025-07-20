@@ -131,7 +131,7 @@ def create_example_component(
         "kind": "Config",
         "deploy": {
             "kubectl": {
-                "default_namespace": namespace,
+                "defaultNamespace": namespace,
             }
         },
         "manifests": {

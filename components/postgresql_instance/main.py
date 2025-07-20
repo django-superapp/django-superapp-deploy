@@ -27,6 +27,7 @@ class S3BackupConfig(TypedDict, total=False):
         region: S3 region
         access_key: S3 access key
         secret_key: S3 secret key
+        path: Path within the bucket (optional)
     """
     enabled: bool
     endpoint: str
@@ -34,6 +35,7 @@ class S3BackupConfig(TypedDict, total=False):
     region: str
     access_key: str
     secret_key: str
+    path: Optional[str]
 
 
 class S3BootstrapConfig(TypedDict, total=False):
@@ -47,6 +49,7 @@ class S3BootstrapConfig(TypedDict, total=False):
         region: S3 region
         access_key: S3 access key
         secret_key: S3 secret key
+        path: Path within the bucket
     """
     enabled: bool
     endpoint: str
@@ -54,6 +57,7 @@ class S3BootstrapConfig(TypedDict, total=False):
     region: str
     access_key: str
     secret_key: str
+    path: str
 
 
 def create_postgres_instance(
@@ -334,6 +338,7 @@ GRANT USAGE ON SCHEMA cron TO {username};
                         
                         # Add S3 backup configuration if enabled
                         **({
+                            "repo2-path": s3_backup["path"],
                             "repo2-s3-uri-style": "path",
                             "repo2-s3-key": s3_backup["access_key"],
                             "repo2-s3-key-secret": s3_backup["secret_key"],
@@ -345,6 +350,7 @@ GRANT USAGE ON SCHEMA cron TO {username};
                         
                         # Add S3 bootstrap configuration if enabled
                         **({
+                            "repo3-path": s3_bootstrap["path"],
                             "repo3-s3-uri-style": "path",
                             "repo3-s3-key": s3_bootstrap["access_key"],
                             "repo3-s3-key-secret": s3_bootstrap["secret_key"],
