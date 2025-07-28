@@ -143,6 +143,21 @@ spec:
         requests:
           cpu: 100m
           memory: 128Mi
+---
+# https://github.com/rancher/rke2/issues/8477#issuecomment-3024283591
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: rke2-calico
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    installation:
+      calicoNetwork:
+        nodeAddressAutodetectionV4:
+          kubernetes: NodeInternalIP
+    felixConfiguration:
+      featureDetectOverride: "ChecksumOffloadBroken=true"
 ```
 
 ## Cluster Configuration > etcd > Backup Snapshots to S3

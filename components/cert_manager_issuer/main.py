@@ -7,8 +7,8 @@ for DNS01 validation using Cloudflare.
 from typing import List, Optional
 
 from ilio import write
-from .component_types import IssuerComponent
 
+from .component_types import IssuerComponent
 from ..base.component_types import Component
 from ..base.constants import *
 
@@ -18,28 +18,29 @@ def create_cert_manager_issuer(
         namespace: str,
         cloudflare_email: str,
         cloudflare_api_token: str,
+        ingress_class_name: str,
         depends_on: Optional[List[Component]] = None
 ) -> IssuerComponent:
     """
     Create a cert-manager issuer configuration for Cloudflare DNS01 validation.
-    
+
     Args:
         slug: Unique identifier for the issuer
         namespace: Kubernetes namespace to deploy the issuer
         cloudflare_email: Email address registered with Cloudflare
         cloudflare_api_token: Cloudflare API token with DNS edit permissions
         depends_on: List of dependencies for Fleet
-        
+
     Returns:
         Directory name where the configuration is generated
     """
     # Create directory structure
     dir_name = f"{slug}-certificate-issuer"
     manifests_dir = f'{GENERATED_SKAFFOLD_TMP_DIR}/{dir_name}/manifests'
-    
+
     os.makedirs(f'{GENERATED_SKAFFOLD_TMP_DIR}/{dir_name}', exist_ok=True)
     os.makedirs(manifests_dir, exist_ok=True)
-    
+
     # Generate Cloudflare API token secret
     api_token_secret = {
         "apiVersion": "v1",
@@ -57,18 +58,18 @@ def create_cert_manager_issuer(
             "api-token": cloudflare_api_token
         }
     }
-    
+
     # Generate Let's Encrypt issuer
-    issuer_secret_name =  f"{slug}-issuer"
-    letsencrypt_issuer = {
+    dns_issuer_secret_name =  f"{slug}-dns-issuer"
+    letsencrypt_dns_issuer = {
         "apiVersion": "cert-manager.io/v1",
         "kind": "Issuer",
         "metadata": {
-            "name": issuer_secret_name,
+            "name": dns_issuer_secret_name,
             "namespace": namespace,
             "labels": {
-                "app.kubernetes.io/name": f"{slug}-letsencrypt",
-                "app.kubernetes.io/instance": slug,
+                "app.kubernetes.io/name": f"{slug}-dns-letsencrypt",
+                "app.kubernetes.io/instance": f"{slug}-dns",
             }
         },
         "spec": {
@@ -94,7 +95,40 @@ def create_cert_manager_issuer(
             }
         }
     }
-    
+
+    # Generate Let's Encrypt issuer
+    http_issuer_secret_name =  f"{slug}-http-issuer"
+    letsencrypt_http_issuer = {
+        "apiVersion": "cert-manager.io/v1",
+        "kind": "Issuer",
+        "metadata": {
+            "name": http_issuer_secret_name,
+            "namespace": namespace,
+            "labels": {
+                "app.kubernetes.io/name": f"{slug}-http-letsencrypt",
+                "app.kubernetes.io/instance": f"{slug}-http",
+            }
+        },
+        "spec": {
+            "acme": {
+                "server": "https://acme-v02.api.letsencrypt.org/directory",
+                "email": cloudflare_email,
+                "privateKeySecretRef": {
+                    "name": f"{slug}-letsencrypt-production"
+                },
+                "solvers": [
+                    {
+                        "http01": {
+                            "ingress": {
+                                "ingressClassName": ingress_class_name,
+                            },
+                        }
+                    }
+                ]
+            }
+        }
+    }
+
     # Generate Skaffold configuration
     skaffold_config = {
         "apiVersion": "skaffold/v3",
@@ -102,7 +136,8 @@ def create_cert_manager_issuer(
         "manifests": {
             "rawYaml": [
                 "./manifests/cert-manager-issuer-secret.yaml",
-                "./manifests/cert-manager-letsencrypt-issuer.yaml",
+                "./manifests/cert-manager-letsencrypt-dns-issuer.yaml",
+                "./manifests/cert-manager-letsencrypt-http-issuer.yaml",
             ],
         },
         "deploy": {
@@ -111,7 +146,7 @@ def create_cert_manager_issuer(
             },
         },
     }
-    
+
     # Generate Fleet configuration
     fleet_config = {
         "dependsOn": [
@@ -144,18 +179,21 @@ def create_cert_manager_issuer(
             ]
         },
     }
-    
+
     # Write all files
-    write(f"{manifests_dir}/cert-manager-issuer-secret.yaml", 
+    write(f"{manifests_dir}/cert-manager-issuer-secret.yaml",
           yaml.dump(api_token_secret, default_flow_style=False))
-    
-    write(f"{manifests_dir}/cert-manager-letsencrypt-issuer.yaml", 
-          yaml.dump(letsencrypt_issuer, default_flow_style=False))
-    
-    write(f"{GENERATED_SKAFFOLD_TMP_DIR}/{dir_name}/skaffold-main-certificates.yaml", 
+
+    write(f"{manifests_dir}/cert-manager-letsencrypt-dns-issuer.yaml",
+          yaml.dump(letsencrypt_dns_issuer, default_flow_style=False))
+
+    write(f"{manifests_dir}/cert-manager-letsencrypt-http-issuer.yaml",
+          yaml.dump(letsencrypt_http_issuer, default_flow_style=False))
+
+    write(f"{GENERATED_SKAFFOLD_TMP_DIR}/{dir_name}/skaffold-main-certificates.yaml",
           yaml.dump(skaffold_config, default_flow_style=False))
-    
-    write(f"{GENERATED_SKAFFOLD_TMP_DIR}/{dir_name}/fleet.yaml", 
+
+    write(f"{GENERATED_SKAFFOLD_TMP_DIR}/{dir_name}/fleet.yaml",
           yaml.dump(fleet_config, default_flow_style=False))
 
     return IssuerComponent(
@@ -163,6 +201,8 @@ def create_cert_manager_issuer(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-certificates",
-        issuer_secret_name=issuer_secret_name,
+        issuer_secret_name=dns_issuer_secret_name,
+        dns_issuer_secret_name=dns_issuer_secret_name,
+        http_issuer_secret_name=http_issuer_secret_name,
     )
 

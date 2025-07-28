@@ -9,4 +9,4 @@ class VMComponent(Component):
     Attributes:
         vm_name: Name of the virtual machine
     """
-    vm_name: str
+    vm_name: str = ""

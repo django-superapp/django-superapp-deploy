@@ -1,8 +1,6 @@
-import os
 import inspect
+import os
 
-def escape_registry_url(i):
-    return i.replace("-", "_").replace(".", "_").replace("/", "_")
 
 def get_chart_path(chart_name):
     """

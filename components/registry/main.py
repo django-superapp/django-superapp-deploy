@@ -1,11 +1,10 @@
-import os
-import json
 import base64
-from typing import Any, Dict, List, Optional
+import json
+from typing import List, Optional
 
-import yaml
 from ilio import write
 
+from .component_types import RegistryComponent
 from ..base.component_types import Component
 from ..base.constants import *
 
@@ -17,9 +16,8 @@ def create_registry(
     registry_username: str,
     registry_password: str,
     insecure_registries: Optional[List[str]] = None,
-    secret_name: str = "registry-secret",
     depends_on: Optional[List[Component]] = None
-) -> Component:
+) -> RegistryComponent:
     """
     Create a Kubernetes secret for Docker registry authentication.
     
@@ -30,7 +28,6 @@ def create_registry(
         registry_username: Username for registry authentication
         registry_password: Password for registry authentication
         insecure_registries: List of insecure registries
-        secret_name: Name of the Kubernetes secret
         depends_on: List of dependencies for Fleet
         
     Returns:
@@ -40,6 +37,8 @@ def create_registry(
     dir_name = f"{slug}-registry"
     output_dir = f'{GENERATED_SKAFFOLD_TMP_DIR}/{dir_name}'
     manifests_dir = f'{output_dir}/manifests'
+    secret_name = f"{slug}-registry-secret"
+    kaniko_secret_name = f"{slug}-registry-kaniko-secret"
     
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(manifests_dir, exist_ok=True)
@@ -62,6 +61,7 @@ def create_registry(
         docker_config["insecure-registries"] = insecure_registries
     
     # Create secret manifest
+    # TODO: the below secret is not sealed correctly
     registry_secret = {
         "apiVersion": "v1",
         "kind": "Secret",
@@ -75,9 +75,29 @@ def create_registry(
         "type": "kubernetes.io/dockerconfigjson"
     }
     
-    # Write registry secret manifest
+    # Create kaniko opaque secret with registry credentials
+    # Note: Skaffold expects an Opaque secret with config.json for Kaniko builds
+    kaniko_registry_secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {
+            "name": kaniko_secret_name,
+            "namespace": namespace
+        },
+        "data": {
+            "registry_url": base64.b64encode(registry_url.encode()).decode(),
+            "registry_username": base64.b64encode(registry_username.encode()).decode(),
+            "registry_password": base64.b64encode(registry_password.encode()).decode(),
+            "config.json": base64.b64encode(json.dumps(docker_config).encode()).decode()
+        },
+        "type": "Opaque"
+    }
+    
+    # Write registry secret manifests
     write(f"{manifests_dir}/registry-secret.yaml", 
           yaml.dump(registry_secret, default_flow_style=False))
+    write(f"{manifests_dir}/registry-kaniko-secret.yaml", 
+          yaml.dump(kaniko_registry_secret, default_flow_style=False))
     
     # Generate skaffold.yaml
     skaffold_config = {
@@ -86,6 +106,7 @@ def create_registry(
         "manifests": {
             "rawYaml": [
                 "./manifests/registry-secret.yaml",
+                "./manifests/registry-kaniko-secret.yaml",
             ],
         },
         "deploy": {
@@ -114,10 +135,14 @@ def create_registry(
     fleet_yaml = yaml.dump(fleet_config, default_flow_style=False)
     write(f"{output_dir}/fleet.yaml", fleet_yaml)
     
-    return Component(
+    return RegistryComponent(
         slug=slug,
         namespace=namespace,
         dir_name=dir_name,
+        registry_url=registry_url,
+        secret_name=secret_name,
+        kaniko_secret_name=kaniko_secret_name,
+        kaniko_namespace=namespace,
         fleet_name=f"{slug}-registry",
         depends_on=depends_on
     )

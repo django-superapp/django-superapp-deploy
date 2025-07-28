@@ -1,10 +1,5 @@
-import glob
-import os
-
-import yaml
 from ilio import write
 
-from ..base.component_types import Component
 from ..base.constants import *
 
 
@@ -117,7 +112,7 @@ def generate_intelij_skaffolds_run_configurations():
                 run_configuration_template.format(
                     configuration_name=name,
                     kubeconfig_path=os.path.abspath(KUBECONFIG).replace(REPO_ROOT, "$PROJECT_DIR$"),
-                    registry_url=REGISTRY_URL,
+                    registry_url="REGISTRY_URL_HERE", # TODO: implement me
                     skaffold_configuration_path=filepath.replace(REPO_ROOT, "$PROJECT_DIR$"),
                     env_variables='\n'.join([
                         f"<entry key=\"DOCKER_BUILDKIT\" config=\"1\" />",
