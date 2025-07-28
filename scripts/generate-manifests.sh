@@ -15,6 +15,37 @@ rm -rf "$GENERATED_MANIFESTS_DIR";
 mkdir "$GENERATED_MANIFESTS_DIR";
 cd "$GENERATED_MANIFESTS_DIR";
 
+echo "Copying values files for Fleet-only components..";
+cd "$GENERATED_SKAFFOLD_DIR";
+
+# Copy values files for Fleet-only components that reference git charts
+for d in */ ; do
+  cd "$d" || continue
+  
+  # Check if this is a Fleet-only component (has fleet.yaml with git URL and values files)
+  if [ -e "fleet.yaml" ] && grep -q 'chart: git@' fleet.yaml 2>/dev/null && grep -q 'valuesFiles:' fleet.yaml 2>/dev/null; then
+    echo "Copying values files for Fleet-only component: $d"
+    mkdir -p "$GENERATED_MANIFESTS_DIR/$d"
+    
+    # Copy the fleet.yaml file
+    cp fleet.yaml "$GENERATED_MANIFESTS_DIR/$d/"
+    
+    # Copy all values files (typically *.yaml files except fleet.yaml and skaffold*.yaml)
+    for values_file in *.yaml; do
+      if [ "$values_file" != "fleet.yaml" ] && [ "$values_file" != "skaffold.yaml" ] && [[ "$values_file" != skaffold-*.yaml ]]; then
+        if [ -f "$values_file" ]; then
+          cp "$values_file" "$GENERATED_MANIFESTS_DIR/$d/"
+          echo "Copied $values_file to $GENERATED_MANIFESTS_DIR/$d/"
+        fi
+      fi
+    done
+  fi
+  
+  cd ..
+done
+
+cd "$GENERATED_MANIFESTS_DIR";
+
 echo "Rendering skaffolds..";
 cd "$GENERATED_SKAFFOLD_DIR";
 
@@ -123,7 +154,7 @@ for d in */ ; do
   echo "Processing $d";
   [[ $d =~ .*common.* ]] && export NS=$BRIDGE_COMMON_NAMESPACE || export NS=$NAMESPACE;
 
-  if [ -e "manifests.yaml" ]; then
+  if [ -e "manifests.yaml" ] && [ -s "manifests.yaml" ] && yq eval '.metadata.name' manifests.yaml 2>/dev/null | grep -v '^---$' | grep -v '^null$' | grep -q .; then
         #  cp manifests.yaml manifests.yaml.bak;
 
         echo "Deleting empty manifests elements..";
@@ -139,7 +170,7 @@ for d in */ ; do
         if [ -z "$names" ]; then
           echo -e "\033[1;33mWarning: No manifest names found in $d\033[0m"
         else
-          for name in $names; do 
+          for name in $names; do
             mkdir -p "$name" || handle_error "$d" "mkdir -p $name"
           done
         fi
@@ -161,16 +192,16 @@ for d in */ ; do
         echo "Sealing secrets..."
         # Use a temporary file to capture any errors from the find command
         error_file=$(mktemp)
-        
+
         # Set a trap to ensure the error file is removed
         trap 'rm -f "$error_file"' EXIT
 
         echo "Sealing secrets in $d"
-        
+
         # Use set -e inside the bash script to ensure it exits on any error
         if ! find . -type f -iname '*secret*' -exec bash -c '
           set -e
-          if ! kubeseal -f "$1" --allow-empty-data --cert "$2" -w "$1.sealed.yml" 2>/tmp/kubeseal_error; then
+          if ! kubeseal -f "$1" --allow-empty-data --scope namespace-wide --cert "$2" -w "$1.sealed.yml" 2>/tmp/kubeseal_error; then
             echo -e "\033[1;31m┌─────────────────────────────────────────────────────────────────┐\033[0m"
             echo -e "\033[1;31m│                     KUBESEAL ERROR                              │\033[0m"
             echo -e "\033[1;31m└─────────────────────────────────────────────────────────────────┘\033[0m"
@@ -191,11 +222,15 @@ for d in */ ; do
           rm -f "$error_file"
           exit 1
         fi
-        
+
         rm -f "$error_file"
 
         rm manifests.yaml;
         sync;
+  else
+    echo "Skipping manifest processing for $d (no manifests or Fleet-only component)";
+    # Clean up empty or invalid manifests.yaml if it exists
+    [ -e "manifests.yaml" ] && rm -f manifests.yaml
   fi;
 
 

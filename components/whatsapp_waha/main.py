@@ -256,4 +256,5 @@ def create_whatsapp_waha(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-whatsapp-waha",
+        depends_on=depends_on
     )

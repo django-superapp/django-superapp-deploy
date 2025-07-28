@@ -573,4 +573,5 @@ GRANT USAGE ON SCHEMA cron TO {username};
         fleet_name=f"{slug}-postgres",
         superuser_postgres_uri=superuser_postgres_uri,
         normal_user_postgres_uri=normal_user_postgres_uri,
+        depends_on=depends_on
     )

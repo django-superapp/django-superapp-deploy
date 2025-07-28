@@ -170,5 +170,6 @@ def create_ingress_nginx(
         slug=slug,
         namespace=namespace,
         dir_name=dir_name,
-        fleet_name=f"{slug}-ingress-nginx"
+        fleet_name=f"{slug}-ingress-nginx",
+        depends_on=depends_on
     )

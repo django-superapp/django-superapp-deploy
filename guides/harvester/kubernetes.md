@@ -60,6 +60,13 @@ NO_PROXY=localhost,127.0.0.1,0.0.0.0,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,cat
 - Kuberentes Version: v1.27.10+rke2r1 (or the latest stable kubernetes version)
 - Cloudf Provider: harvester
 
+## Cluster Configuration > Add-on: Calico
+```yaml
+installation:
+    calicoNetwork:
+      nodeAddressAutodetectionV4:
+        kubernetes: NodeInternalIP
+```
 ## Cluster Configuration > Add-On Config > Additional Manifest
 *Obs! If you use proxy protocol, please enable it in the below configuration*
 ```yaml
@@ -146,73 +153,6 @@ spec:
 - folder: ``
 - region: ``
 - endpoint: `c6r1.fra2.idrivee2-55.com` (do not use https)
--
-## Harvester Loadbalancer
-Configure the below Harvester Loadbalancer:
-```yaml
-apiVersion: loadbalancer.harvesterhci.io/v1beta1
-kind: LoadBalancer
-metadata:
-  name: NAME_HERE
-  annotations:
-    loadbalancer.harvesterhci.io/namespace: NAMESPACE_HERE
-    loadbalancer.harvesterhci.io/network: ''
-    loadbalancer.harvesterhci.io/project: ''
-    #  key: string
-  finalizers:
-    - wrangler.cattle.io/harvester-lb-controller
-  #    - string
-  labels:
-    {}
-  #  key: string
-  namespace: NAMESPACE_HERE
-spec:
-  healthCheck:
-  #    PeriodSeconds: int
-  #    failureThreshold: int
-  #    port: int
-  #    successThreshold: int
-  #    timeoutSeconds: int
-  ipam: dhcp
-  listeners:
-    - backendPort: 31080
-      name: http
-      port: 80
-      protocol: TCP
-    - backendPort: 31443
-      name: https
-      port: 443
-      protocol: TCP
-    - backendPort: 31432
-      name: pg
-      port: 31432
-      protocol: TCP
-    - backendPort: 31433
-      name: pg2
-      port: 31433
-      protocol: TCP
-    - backendPort: 31883
-      name: mqtt
-      port: 31883
-      protocol: TCP
-    - backendPort: 31285
-      name: teltonika-tcp
-      port: 31285
-      protocol: TCP
-  #    - backendPort: int
-  #      name: string
-  #      port: int
-  #      protocol: string
-  backendServerSelector:
-    harvesterhci.io/creator:
-      - docker-machine-driver-harvester
-  workloadType: vm
-#  backendServers:
-#    - string
-#  description: string
-__clone: true
-```
-- configure a DNS record like `*.production-bridge.prod1.bringes.app,production-bridge.prod1.bringes.app` -> `10.5.100.215`
 
 ### Obs.
 If you're deploying on Harvester, make sure that Harvester VIP is accessible from the selected VM network as these requests are not using http_proxy.

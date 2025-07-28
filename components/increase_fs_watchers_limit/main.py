@@ -184,5 +184,6 @@ def create_increase_fs_watchers_limit(
         slug=slug,
         namespace=namespace,
         dir_name=dir_name,
-        fleet_name=f"{slug}-fs-watchers"
+        fleet_name=f"{slug}-fs-watchers",
+        depends_on=depends_on
     )

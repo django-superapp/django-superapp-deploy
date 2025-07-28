@@ -234,4 +234,5 @@ def create_librechat(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-librechat",
+        depends_on=depends_on
     )
