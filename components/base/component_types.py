@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -11,11 +11,13 @@ class Component:
         slug: Unique identifier for the deployment
         dir_name: Directory name where the configuration is generated
         fleet_name: Name used in Fleet dependencies
+        depends_on: List of components this component depends on
     """
     slug: str
     namespace: str
     dir_name: str
     fleet_name: str
+    depends_on: Optional[List['Component']] = None
     
     @property
     def as_fleet_dependency(self) -> Dict:
