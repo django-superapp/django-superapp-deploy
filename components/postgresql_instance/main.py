@@ -1,15 +1,15 @@
-import os
-import yaml
 import base64
-from typing import List, Optional, TypedDict, Dict, Any, Union, Literal
+import os
+from typing import List, Optional, TypedDict, Dict
 
-from components.postgresql_instance.component_types import PostgresInstanceComponent
+import yaml
 from ilio import write
 
 from components.base.component_types import Component
 from components.base.constants import (
     GENERATED_SKAFFOLD_TMP_DIR,
 )
+from components.postgresql_instance.component_types import PostgresInstanceComponent
 from components.postgresql_instance.constants import (
     POSTGRES_DEFAULT_VERSION,
     POSTGRES_DEFAULT_IMAGE
@@ -19,7 +19,7 @@ from components.postgresql_instance.constants import (
 class S3BackupConfig(TypedDict, total=False):
     """
     Configuration for S3 backup repository.
-    
+
     Attributes:
         enabled: Whether S3 backup is enabled
         endpoint: S3 endpoint URL
@@ -41,7 +41,7 @@ class S3BackupConfig(TypedDict, total=False):
 class S3BootstrapConfig(TypedDict, total=False):
     """
     Configuration for S3 bootstrap repository.
-    
+
     Attributes:
         enabled: Whether S3 bootstrap is enabled
         endpoint: S3 endpoint URL
@@ -83,7 +83,7 @@ def create_postgres_instance(
 ) -> PostgresInstanceComponent:
     """
     Deploy a PostgreSQL instance using the PostgreSQL Operator.
-    
+
     Args:
         slug: Unique identifier for the deployment
         namespace: Kubernetes namespace to deploy the component
@@ -104,7 +104,7 @@ def create_postgres_instance(
         service_type: Type of Kubernetes service (ClusterIP, LoadBalancer, etc.)
         service_annotations: Annotations to add to the service metadata
         depends_on: List of dependencies for Fleet
-        
+
     Returns:
         Component object with metadata about the deployment
     """
@@ -114,7 +114,7 @@ def create_postgres_instance(
     os.makedirs(output_dir, exist_ok=True)
     manifests_dir = f"{output_dir}/manifests"
     os.makedirs(manifests_dir, exist_ok=True)
-    
+
     # Generate init SQL ConfigMap
     init_sql_manifest = {
         "apiVersion": "v1",
@@ -140,11 +140,11 @@ GRANT USAGE ON SCHEMA cron TO {username};
 """
         }
     }
-    
+
     # Write init SQL ConfigMap
     with open(f"{manifests_dir}/init-pg-sql.yaml", "w") as file:
         yaml.dump(init_sql_manifest, file, default_flow_style=False)
-    
+
     # Generate superuser Secret
     superuser_secret = {
         "apiVersion": "v1",
@@ -167,11 +167,11 @@ GRANT USAGE ON SCHEMA cron TO {username};
             "password": base64.b64encode(superuser_password.encode('ascii')).decode('ascii')
         }
     }
-    
+
     # Write superuser Secret
     with open(f"{manifests_dir}/superuser-secret.yaml", "w") as file:
         yaml.dump(superuser_secret, file, default_flow_style=False)
-    
+
     # Generate regular user Secret
     user_secret = {
         "apiVersion": "v1",
@@ -194,11 +194,11 @@ GRANT USAGE ON SCHEMA cron TO {username};
             "password": base64.b64encode(user_password.encode('ascii')).decode('ascii')
         }
     }
-    
+
     # Write regular user Secret
     with open(f"{manifests_dir}/user-secret.yaml", "w") as file:
         yaml.dump(user_secret, file, default_flow_style=False)
-    
+
     # Generate TLS Secret if certificates are provided
     if ca_cert and tls_cert and tls_private_key:
         tls_secret = {
@@ -222,11 +222,11 @@ GRANT USAGE ON SCHEMA cron TO {username};
                 "tls.key": base64.b64encode(tls_private_key.encode('ascii')).decode('ascii'),
             }
         }
-        
+
         # Write TLS Secret
         with open(f"{manifests_dir}/cluster-cert.yaml", "w") as file:
             yaml.dump(tls_secret, file, default_flow_style=False)
-    
+
     # Generate PostgreSQL Cluster manifest
     postgres_cluster = {
         "apiVersion": "postgres-operator.crunchydata.com/v1beta1",
@@ -285,7 +285,7 @@ GRANT USAGE ON SCHEMA cron TO {username};
                     "repoName": "repo3"
                 }
             }} if s3_bootstrap and s3_bootstrap.get("enabled", False) else {}),
-            
+
             "patroni": {
                 "dynamicConfiguration": {
                     "postgresql": {
@@ -335,7 +335,7 @@ GRANT USAGE ON SCHEMA cron TO {username};
                         "repo1-retention-full": "10",
                         "repo1-retention-full-type": "count",
                         "spool-path": "/pgdata/pgbackrest/pgbackrest-spool",
-                        
+
                         # Add S3 backup configuration if enabled
                         **({
                             "repo2-path": s3_backup["path"],
@@ -347,11 +347,12 @@ GRANT USAGE ON SCHEMA cron TO {username};
                             "repo2-retention-full": "30",
                             "repo2-retention-full-type": "count",
                            } if s3_backup and s3_backup.get("enabled", False) else {}),
-                        
+
                         # Add S3 bootstrap configuration if enabled
                         **({
                             "repo3-path": s3_bootstrap["path"],
                             "repo3-s3-uri-style": "path",
+                            "repo3-path": s3_bootstrap["path"],
                             "repo3-s3-key": s3_bootstrap["access_key"],
                             "repo3-s3-key-secret": s3_bootstrap["secret_key"],
                             "repo3-retention-archive": "1",
@@ -360,13 +361,13 @@ GRANT USAGE ON SCHEMA cron TO {username};
                             "repo3-retention-full-type": "count",
                            } if s3_bootstrap and s3_bootstrap.get("enabled", False) else {}),
                     },
-                    
+
                     # Add manual backup configuration if S3 backup is enabled
                     **({"manual": {
                         "options": ["--type=full"],
                         "repoName": "repo2"
                     }} if s3_backup and s3_backup.get("enabled", False) else {}),
-                    
+
                     "repos": [
                         # Local volume repository (always present)
                         {
@@ -388,7 +389,7 @@ GRANT USAGE ON SCHEMA cron TO {username};
                                 }
                             }
                         }
-                    ] + 
+                    ] +
                     # S3 backup repository (if enabled)
                     ([{
                         "name": "repo2",
@@ -414,7 +415,7 @@ GRANT USAGE ON SCHEMA cron TO {username};
                     }] if s3_bootstrap and s3_bootstrap.get("enabled", False) else [])
                 }
             },
-            
+
             "proxy": {
                 "pgBouncer": {
                     "config": {
@@ -463,17 +464,17 @@ GRANT USAGE ON SCHEMA cron TO {username};
             ]
         }
     }
-    
+
     # Add TLS configuration if certificates are provided
     if ca_cert and tls_cert and tls_private_key:
         postgres_cluster["spec"]["customTLSSecret"] = {
             "name": f"{slug}-pg-cluster-cert"
         }
-    
+
     # Write PostgreSQL Cluster manifest
     with open(f"{manifests_dir}/cluster.yaml", "w") as file:
         yaml.dump(postgres_cluster, file, default_flow_style=False)
-    
+
     # Generate Service manifest for external access
     service_manifest = {
         "apiVersion": "v1",
@@ -502,11 +503,11 @@ GRANT USAGE ON SCHEMA cron TO {username};
             }
         }
     }
-    
+
     # Write Service manifest
     with open(f"{manifests_dir}/service.yaml", "w") as file:
         yaml.dump(service_manifest, file, default_flow_style=False)
-    
+
     # Generate skaffold.yaml
     skaffold_config = {
         "apiVersion": "skaffold/v3",
@@ -526,14 +527,14 @@ GRANT USAGE ON SCHEMA cron TO {username};
             ]
         }
     }
-    
+
     # Add TLS Secret to rawYaml if certificates are provided
     if ca_cert and tls_cert and tls_private_key:
         skaffold_config["manifests"]["rawYaml"].append(f"./manifests/cluster-cert.yaml")
-    
+
     skaffold_yaml = yaml.dump(skaffold_config, default_flow_style=False)
     write(f"{output_dir}/skaffold-postgres.yaml", skaffold_yaml)
-    
+
     # Generate fleet.yaml for dependencies
     fleet_config = {
         "dependsOn": [
@@ -557,14 +558,14 @@ GRANT USAGE ON SCHEMA cron TO {username};
             ]
         },
     }
-    
+
     fleet_yaml = yaml.dump(fleet_config, default_flow_style=False)
     write(f"{output_dir}/fleet.yaml", fleet_yaml)
-    
+
     # Construct PostgreSQL URIs
-    superuser_postgres_uri = f"postgres://{superuser}:{superuser_password}@{slug}-pg-ha.{namespace}:5432/{db_name}?sslmode=require"
-    normal_user_postgres_uri = f"postgres://{username}:{user_password}@{slug}-pg-ha.{namespace}:5432/{db_name}?sslmode=require"
-    
+    superuser_postgres_uri = f"postgres://{superuser}:{superuser_password}@{slug}-pg-primary.{namespace}:5432/{db_name}?sslmode=require"
+    normal_user_postgres_uri = f"postgres://{username}:{user_password}@{slug}-pg-primary.{namespace}:5432/{db_name}?sslmode=require"
+
     # Return Component object
     return PostgresInstanceComponent(
         slug=slug,

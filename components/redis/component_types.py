@@ -4,6 +4,5 @@ from components.base.component_types import Component
 
 
 @dataclass
-class CertificateComponent(Component):
-    certificate_secret_name: str = ""
-
+class RedisComponent(Component):
+    redis_uri: str = ""

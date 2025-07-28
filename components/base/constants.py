@@ -1,9 +1,8 @@
-import os
-import yaml
-import sys
 import glob
+import os
+import sys
 
-from .utils import escape_registry_url
+import yaml
 
 CONSTANTS_FILE_ABOSLUTE_PATH = os.path.dirname(__file__)
 
@@ -87,35 +86,7 @@ GENERATED_MANIFESTS_DIR = os.environ['GENERATED_MANIFESTS_DIR']
 GENERATED_SKAFFOLD_TMP_DIR = os.environ['GENERATED_SKAFFOLD_TMP_DIR']
 
 # Skaffold
-IMAGES_TAG = os.environ.get('IMAGES_TAG', '')
-SKAFFOLD_DEFAULT_TAG_POLICY = {
-    "envTemplate": {
-        "template": "{{.IMAGES_TAG}}"
-    }
-} if 'IMAGES_TAG' in os.environ and os.environ['IMAGES_TAG'] else {
-    "inputDigest": {}
-}
-SKAFFOLD_DEFAULT_BUILD = {
-    "platforms": [
-        # "linux/arm64",
-        "linux/amd64"
-    ],
-    "tagPolicy": SKAFFOLD_DEFAULT_TAG_POLICY,
-}
 REMOTE_DOCKER_HOST = str(os.environ.get('REMOTE_DOCKER_HOST', '')).lower()
-SKAFFOLD_DEFAULT_BUILD['local'] = {
-    "push": True,
-    "useDockerCLI": True,
-    "useBuildkit": True,
-    "concurrency": 5,
-}
-
-# Docker Registry
-REGISTRY_URL = os.environ['REGISTRY_URL']
-REGISTRY_PULL_USERNAME = os.environ.get('REGISTRY_PULL_USERNAME')
-REGISTRY_PULL_PASSWORD = os.environ.get('REGISTRY_PULL_PASSWORD')
-INSECURE_REGISTRY = []
-REGISTRY_URL_ESCAPED = escape_registry_url(REGISTRY_URL)
 
 # All constants defined in this file will be exported as ENV variables in bash scripts by ./utils/common-env.sh
 # Exporting all variables as env variables
