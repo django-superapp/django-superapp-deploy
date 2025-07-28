@@ -1,0 +1,4 @@
+component_name: cloudnative_pg_operator
+repositories:
+  - name: cnpg-grafana-dashboards
+    url: https://cloudnative-pg.github.io/grafana-dashboards
