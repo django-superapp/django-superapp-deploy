@@ -1,10 +1,10 @@
 """
-Longhorn Storage Component
+Longhorn Storage Operator Component
 
-This module provides functionality to deploy the Longhorn distributed
-storage system for Kubernetes.
+This module provides functionality to deploy the Longhorn operator
+for Kubernetes distributed storage system.
 """
-from typing import Any, Dict, List, Optional, Union, TypedDict, Literal
+from typing import Any, Dict, List, Optional
 import os
 
 import yaml
@@ -15,85 +15,17 @@ from ..base.constants import *
 from ..base.utils import get_chart_path
 
 
-class LonghornStorageClass(TypedDict, total=False):
-    """Configuration for a Longhorn storage class."""
-    name: str
-    replica_count: int
-    disk_selector: List[str]
-    node_selector: List[str]
-    is_default: bool
-    reclaim_policy: Literal["Delete", "Retain"]
-    fs_type: str
-
-
-
-
-
-
-def generate_storage_class_manifest(sc: LonghornStorageClass, namespace: str) -> Dict[str, Any]:
-    """
-    Generate a Kubernetes StorageClass manifest for Longhorn.
-    
-    Args:
-        sc: Storage class configuration
-        namespace: Kubernetes namespace
-        
-    Returns:
-        StorageClass manifest
-    """
-    name = sc.get("name", "longhorn")
-    replica_count = sc.get("replica_count", 3)
-    disk_selector = sc.get("disk_selector", [])
-    node_selector = sc.get("node_selector", [])
-    is_default = sc.get("is_default", False)
-    reclaim_policy = sc.get("reclaim_policy", "Delete")
-    fs_type = sc.get("fs_type", "ext4")
-    
-    # Create the StorageClass manifest
-    storage_class = {
-        "apiVersion": "storage.k8s.io/v1",
-        "kind": "StorageClass",
-        "metadata": {
-            "name": name,
-            "annotations": {}
-        },
-        "provisioner": "driver.longhorn.io",
-        "parameters": {
-            "numberOfReplicas": str(replica_count),
-            "staleReplicaTimeout": "30",
-            "fromBackup": "",
-            "fsType": fs_type
-        },
-        "reclaimPolicy": reclaim_policy,
-        "allowVolumeExpansion": True
-    }
-    
-    # Add selectors if provided
-    if disk_selector:
-        storage_class["parameters"]["diskSelector"] = ",".join(disk_selector)
-    
-    if node_selector:
-        storage_class["parameters"]["nodeSelector"] = ",".join(node_selector)
-    
-    # Set as default storage class if specified
-    if is_default:
-        storage_class["metadata"]["annotations"]["storageclass.kubernetes.io/is-default-class"] = "true"
-    
-    return storage_class
-
-
-def create_longhorn(
+def create_longhorn_operator(
         slug: str,
         namespace: str = 'longhorn-system',
         ingress_enabled: bool = False,
         ingress_host: Optional[str] = None,
         ingress_tls_secret: Optional[str] = None,
         ingress_class_name: str = 'nginx',
-        storage_classes: Optional[List[LonghornStorageClass]] = None,
         depends_on: Optional[List[Component]] = None
 ) -> Component:
     """
-    Deploy the Longhorn storage system using Helm.
+    Deploy the Longhorn operator using Helm.
     
     Args:
         slug: Unique identifier for the deployment
@@ -102,31 +34,29 @@ def create_longhorn(
         ingress_host: Hostname for the Longhorn UI ingress
         ingress_tls_secret: Name of the TLS secret for the ingress
         ingress_class_name: Ingress class to use
-        storage_classes: List of LonghornStorageClass configurations
         depends_on: List of dependencies for Fleet
         
     Returns:
-        Directory name where the configuration is generated
+        Component instance for the Longhorn operator
     """
     # Validate required parameters if ingress is enabled
     if ingress_enabled and not ingress_host:
         raise ValueError("ingress_host is required when ingress_enabled is True")
         
-    # Initialize storage classes if not provided
-    storage_classes = storage_classes or []
     # Create directory structure
-    dir_name = f"{slug}-longhorn"
+    dir_name = f"{slug}-longhorn-operator"
     output_dir = f'{GENERATED_SKAFFOLD_TMP_DIR}/{dir_name}'
     os.makedirs(output_dir, exist_ok=True)
 
-    # Generate Helm values for Longhorn
+    # Generate Helm values for Longhorn operator
     longhorn_values = {
         "persistence": {
-            "enabled": False,  # Disable default persistence to use our custom configuration
-            "defaultClass": len(storage_classes) == 0,  # Only true if no custom storage classes
+            "enabled": False,  # Disable default persistence
+            "defaultClass": False,  # Don't create default storage class
             "defaultClassReplicaCount": 3,
         },
         "defaultSettings": {
+            "createDefaultDiskLabeledNodes": True,
             "defaultReplicaCount": 3,
             "backupstorePollInterval": 300,
             "defaultDataPath": "/var/lib/longhorn/",
@@ -187,7 +117,7 @@ def create_longhorn(
             "helm": {
                 "releases": [
                     {
-                        "name": f"{slug}-longhorn",
+                        "name": f"{slug}-longhorn-operator",
                         "namespace": namespace,
                         "chartPath": get_chart_path(f"./charts/longhorn"),
                         "createNamespace": True,
@@ -211,10 +141,10 @@ def create_longhorn(
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
         "helm": {
-            "releaseName": f"{slug}-longhorn",
+            "releaseName": f"{slug}-longhorn-operator",
         },
         "labels": {
-            "name": f"{slug}-longhorn",
+            "name": f"{slug}-longhorn-operator",
         },
         "diff": {
             "comparePatches": [
@@ -256,58 +186,12 @@ def create_longhorn(
             ]
         }
     }
-    
-    # Generate storage class configurations if provided
-    if storage_classes:
-        longhorn_values["persistence"]["storageClassDevices"] = []
-        
-        for sc in storage_classes:
-            name = sc.get("name", f"longhorn-{slug}")
-            replica_count = sc.get("replica_count", 3)
-            disk_selector = sc.get("disk_selector", [])
-            node_selector = sc.get("node_selector", [])
-            is_default = sc.get("is_default", False)
-            reclaim_policy = sc.get("reclaim_policy", "Delete")
-            fs_type = sc.get("fs_type", "ext4")
-            
-            # Add the storage class configuration
-            storage_class_config = {
-                "name": name,
-                "replicaCount": replica_count,
-                "default": is_default,
-                "reclaimPolicy": reclaim_policy,
-                "fsType": fs_type
-            }
-            
-            # Add selectors if provided
-            if disk_selector:
-                storage_class_config["diskSelector"] = ",".join(disk_selector)
-            
-            if node_selector:
-                storage_class_config["nodeSelector"] = ",".join(node_selector)
-                
-            longhorn_values["persistence"]["storageClassDevices"].append(storage_class_config)
-
-    # Create storage class manifests
-    if storage_classes:
-        sc_manifests = []
-        for sc in storage_classes:
-            sc_manifest = generate_storage_class_manifest(sc, namespace)
-            sc_manifests.append(sc_manifest)
-        
-        write(f"{output_dir}/longhorn-storage-classes.yaml", 
-              yaml.dump_all(sc_manifests, default_flow_style=False))
-        
-        # Add the storage classes to the manifests
-        if "rawYaml" not in skaffold_config["manifests"]:
-            skaffold_config["manifests"]["rawYaml"] = []
-        skaffold_config["manifests"]["rawYaml"].append("./longhorn-storage-classes.yaml")
 
     # Write all configuration files
     write(f"{output_dir}/longhorn-values.yaml", 
           yaml.dump(longhorn_values, default_flow_style=False))
     
-    write(f"{output_dir}/skaffold-longhorn.yaml", 
+    write(f"{output_dir}/skaffold-longhorn-operator.yaml", 
           yaml.dump(skaffold_config, default_flow_style=False))
     
     write(f"{output_dir}/fleet.yaml", 
@@ -317,6 +201,6 @@ def create_longhorn(
         slug=slug,
         namespace=namespace,
         dir_name=dir_name,
-        fleet_name=f"{slug}-longhorn",
+        fleet_name=f"{slug}-longhorn-operator",
         depends_on=depends_on
     )
