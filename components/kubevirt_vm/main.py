@@ -542,4 +542,5 @@ def create_kubevirt_vm(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-kubevirt-vm",
+        depends_on=depends_on
     )
