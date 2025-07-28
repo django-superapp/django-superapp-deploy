@@ -124,6 +124,7 @@ def create_cert_manager_certificate(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-certificates",
-        certificate_secret_name=f"{slug}-certificate"
+        certificate_secret_name=f"{slug}-certificate",
+        depends_on=depends_on
     )
 
