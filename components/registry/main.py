@@ -119,4 +119,5 @@ def create_registry(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-registry",
+        depends_on=depends_on
     )

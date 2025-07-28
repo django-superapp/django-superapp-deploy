@@ -137,4 +137,5 @@ def create_cloudflare_tunnel(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-cloudflare-tunnel",
+        depends_on=depends_on
     )

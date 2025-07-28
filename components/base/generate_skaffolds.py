@@ -1,6 +1,7 @@
 import glob
 import os
-from typing import List, Optional
+import yaml
+from typing import List, Optional, Set
 
 from ilio import write
 
@@ -8,9 +9,49 @@ from .component_types import Component
 from .constants import *
 
 
-def generate_skaffolds(components: List[Component]):
-    global_skaffold_paths = []
+def _get_component_id(component: Component) -> str:
+    """Create unique identifier using slug, namespace, dir_name, and fleet_name"""
+    return f"{component.slug}:{component.namespace}:{component.dir_name}:{component.fleet_name}"
+
+
+def _resolve_dependencies(components: List[Component]) -> List[Component]:
+    """
+    Resolve component dependencies to ensure each component appears only once
+    and dependencies are properly ordered.
+    """
+    resolved_components = []
+    visited = set()
+
+    def visit_component(component: Component):
+        component_id = _get_component_id(component)
+        if component_id in visited:
+            return
+
+        # First visit all dependencies
+        if component.depends_on:
+            for dependency in component.depends_on:
+                visit_component(dependency)
+
+        # Then add the component itself
+        if component_id not in visited:
+            resolved_components.append(component)
+            visited.add(component_id)
+
+    # Visit all components to ensure all are included
     for component in components:
+        visit_component(component)
+
+    return resolved_components
+
+
+def generate_skaffolds(components: List[Component]):
+    # Resolve dependencies to get the correct order and avoid duplicates
+    resolved_components = _resolve_dependencies(components)
+
+    print(f"components: {[_get_component_id(c) for c in components]}")
+    print(f"resolved_components: {[_get_component_id(c) for c in resolved_components]}")
+    global_skaffold_paths = []
+    for component in resolved_components:
         dir_name = component.dir_name
         if dir_name == "":
             continue

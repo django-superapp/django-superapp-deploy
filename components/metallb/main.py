@@ -180,4 +180,5 @@ def create_metallb(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-metallb",
+        depends_on=depends_on
     )

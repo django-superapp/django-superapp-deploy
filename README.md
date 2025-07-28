@@ -23,9 +23,9 @@ django_superapp bootstrap-project \
 
 
 ### Useful Guides
-- [Harvester Cluster](./guides/harvester-cluster.md)
-- [Hetzner Cluster](./guides/hetzner-cluster.md)
-- [Kubernetes Cluster](./guides/kubernetes-cluster.md)
+- [Harvester Cluster](guides/harvester/harvester-cluster.md)
+- [Hetzner Cluster](guides/hetzner/hetzner-kubernetes-cluster.md)
+- [Kubernetes Cluster](guides/harvester/kubernetes.md)
 - [Github Runners](./guides/github-runners.md)
 - [Deployments](./guides/deployments.md)
 - [Databases](./guides/databases.md)

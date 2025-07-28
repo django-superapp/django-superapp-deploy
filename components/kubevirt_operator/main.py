@@ -85,4 +85,5 @@ def create_kubevirt_operator(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-kubevirt-operator",
+        depends_on=depends_on
     )

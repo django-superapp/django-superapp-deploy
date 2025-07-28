@@ -65,6 +65,7 @@ def create_postgresql_operator_crds(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-postgresql-operator-crds",
+        depends_on=depends_on
     )
 
 
@@ -143,4 +144,5 @@ def create_postgresql_operator(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-postgresql-operator",
+        depends_on=depends_on
     )

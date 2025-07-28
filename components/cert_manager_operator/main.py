@@ -129,5 +129,6 @@ def create_cert_manager_operator(
         slug=slug,
         namespace=namespace,
         dir_name=dir_name,
-        fleet_name=f"{slug}-cert-manager-operator"
+        fleet_name=f"{slug}-cert-manager-operator",
+        depends_on=depends_on
     )
