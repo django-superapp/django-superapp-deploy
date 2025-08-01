@@ -24,17 +24,17 @@ spec:
             - name: PGUSER
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "cluster.fullname" . }}-app
+                  name: {{ .Values.cluster.initdb.secret.name }}
                   key: username
             - name: PGPASS
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "cluster.fullname" . }}-app
+                  name: {{ .Values.cluster.initdb.secret.name }}
                   key: password
             - name: PGDBNAME
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "cluster.fullname" . }}-app
+                  name: {{ .Values.cluster.initdb.secret.name }}
                   key: dbname
                   optional: true
           args:

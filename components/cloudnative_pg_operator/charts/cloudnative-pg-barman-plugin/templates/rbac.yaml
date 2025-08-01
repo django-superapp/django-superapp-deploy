@@ -1,0 +1,235 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: barman-cloud-leader-election-role
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+    app.kubernetes.io/name: plugin-barman-cloud
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: barman-cloud-metrics-auth-role
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: barman-cloud-metrics-reader
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: barman-cloud-objectstore-editor-role
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+    app.kubernetes.io/name: plugin-barman-cloud
+rules:
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: barman-cloud-objectstore-viewer-role
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+    app.kubernetes.io/name: plugin-barman-cloud
+rules:
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: plugin-barman-cloud
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - barmancloud.cnpg.io
+  resources:
+  - objectstores/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - postgresql.cnpg.io
+  resources:
+  - backups
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: barman-cloud-leader-election-rolebinding
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+    app.kubernetes.io/name: plugin-barman-cloud
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: barman-cloud-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "cloudnative-pg-barman-plugin.serviceAccountName" . }}
+  namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: barman-cloud-metrics-auth-rolebinding
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: barman-cloud-metrics-auth-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "cloudnative-pg-barman-plugin.serviceAccountName" . }}
+  namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: plugin-barman-cloud-binding
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+    app.kubernetes.io/name: plugin-barman-cloud
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: plugin-barman-cloud
+subjects:
+- kind: ServiceAccount
+  name: {{ include "cloudnative-pg-barman-plugin.serviceAccountName" . }}
+  namespace: {{ .Values.namespace }}

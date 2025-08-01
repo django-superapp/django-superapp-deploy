@@ -1,0 +1,23 @@
+apiVersion: v2
+name: cloudnative-pg-barman-plugin
+description: A Helm chart for CloudNativePG Barman Plugin - enables object store backups for PostgreSQL clusters
+type: application
+version: 0.1.0
+appVersion: "v0.5.0"
+keywords:
+  - cloudnative-pg
+  - postgresql
+  - postgres
+  - database
+  - backup
+  - barman
+  - object-store
+  - s3
+  - azure
+  - gcs
+home: https://cloudnative-pg.io
+sources:
+  - https://github.com/cloudnative-pg/plugin-barman-cloud
+maintainers:
+  - name: CloudNativePG Contributors
+    url: https://cloudnative-pg.io

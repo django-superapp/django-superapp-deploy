@@ -1,7 +1,7 @@
 """
 CloudNative PostgreSQL Instance Component
 
-This module provides functionality to deploy PostgreSQL cluster instances 
+This module provides functionality to deploy PostgreSQL cluster instances
 using the CloudNative PostgreSQL operator with the cluster Helm chart.
 """
 
@@ -15,13 +15,13 @@ from components.cloudnative_pg_instance.component_types import CloudNativePgInst
 from components.base.component_types import Component
 from components.base.constants import GENERATED_SKAFFOLD_TMP_DIR
 from components.base.utils import get_chart_path
-from components.cloudnative_pg_instance.constants import CNPG_DEFAULT_VERSION, CNPG_DEFAULT_IMAGE
+from components.cloudnative_pg_instance.constants import CNPG_DEFAULT_IMAGE
 
 
 class S3BackupConfig(TypedDict, total=False):
     """
     Configuration for S3 backup repository.
-    
+
     Attributes:
         enabled: Whether S3 backup is enabled
         endpoint: S3 endpoint URL
@@ -43,7 +43,7 @@ class S3BackupConfig(TypedDict, total=False):
 class S3BootstrapConfig(TypedDict, total=False):
     """
     Configuration for S3 bootstrap repository.
-    
+
     Attributes:
         enabled: Whether S3 bootstrap is enabled
         endpoint: S3 endpoint URL
@@ -65,7 +65,7 @@ class S3BootstrapConfig(TypedDict, total=False):
 class CloudNativePgInstanceConfig(TypedDict, total=False):
     """
     Configuration for CloudNative PostgreSQL instance deployment.
-    
+
     Attributes:
         slug: Unique identifier for the deployment
         namespace: Kubernetes namespace to deploy the cluster
@@ -102,13 +102,46 @@ class CloudNativePgInstanceConfig(TypedDict, total=False):
     depends_on: Optional[List[Component]]
 
 
+def create_scheduled_backup_manifest(cluster_name: str, namespace: str, schedule: str = "0 2 * * *") -> dict:
+    """
+    Create a ScheduledBackup manifest for the Barman plugin.
+    
+    Args:
+        cluster_name: Name of the PostgreSQL cluster
+        namespace: Kubernetes namespace
+        schedule: Cron schedule for backups (default: daily at 2 AM)
+        
+    Returns:
+        ScheduledBackup manifest dictionary
+    """
+    return {
+        "apiVersion": "postgresql.cnpg.io/v1",
+        "kind": "ScheduledBackup",
+        "metadata": {
+            "name": f"{cluster_name}-scheduled-backup",
+            "namespace": namespace
+        },
+        "spec": {
+            "schedule": schedule,
+            "backupOwnerReference": "self",
+            "cluster": {
+                "name": cluster_name
+            },
+            "method": "plugin",
+            "pluginConfiguration": {
+                "name": "barman-cloud.cloudnative-pg.io"
+            }
+        }
+    }
+
+
 def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> CloudNativePgInstanceComponent:
     """
     Deploy a CloudNative PostgreSQL cluster instance using Helm.
-    
+
     Args:
         config: Typed configuration object containing all deployment parameters
-        
+
     Returns:
         CloudNativePgInstanceComponent object with metadata about the deployment
     """
@@ -136,8 +169,8 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
     os.makedirs(output_dir, exist_ok=True)
 
     cluster_name = f"{slug}-pg"
-    
-    # Default PostgreSQL parameters
+
+    # Default PostgreSQL parameters (excluding fixed configuration parameters)
     default_postgresql_params = {
         "max_connections": "200",
         "shared_buffers": "128MB",
@@ -155,18 +188,17 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
         "log_connections": "on",
         "log_disconnections": "on",
         "log_lock_waits": "on",
-        "log_min_duration_statement": "1000",
-        "shared_preload_libraries": "pg_stat_statements"
+        "log_min_duration_statement": "1000"
     }
-    
+
     # Merge with custom parameters
     if postgresql_parameters:
         default_postgresql_params.update(postgresql_parameters)
 
     # Generate Helm values for CloudNative PG cluster
     cnpg_cluster_values = {
+        "fullnameOverride": cluster_name,
         "cluster": {
-            "name": cluster_name,
             "instances": instances,
             "imageName": CNPG_DEFAULT_IMAGE,
             "postgresql": {
@@ -178,50 +210,131 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
             },
             "monitoring": {
                 "enabled": enable_monitoring,
-                "podMonitorEnabled": enable_monitoring
+                "podMonitor": {
+                    "enabled": enable_monitoring
+                }
+            },
+            "services": {
+                "additional": [
+                    {
+                        "selectorType": "rw",
+                        "serviceTemplate": {
+                            "metadata": {
+                                "name": f"{cluster_name}-rw-external",
+                                "annotations": service_annotations,
+
+                            },
+                            "spec": {
+                                "type": service_type
+                            }
+                        }
+                    },
+                    {
+                        "selectorType": "ro",
+                        "serviceTemplate": {
+                            "metadata": {
+                                "name": f"{cluster_name}-ro-external",
+                                "annotations": service_annotations,
+                            },
+                            "spec": {
+                                "type": service_type
+                            }
+                        }
+                    }
+                ]
             }
         },
-        "backup": {
+        "backups": {
             "enabled": True,
             "retentionPolicy": "30d"
         }
     }
 
-    # Add S3 backup configuration if enabled
+    # Configure Barman plugin instead of built-in backup
     if s3_backup and s3_backup.get("enabled", False):
-        cnpg_cluster_values["backup"]["s3"] = {
-            "bucket": s3_backup["bucket"],
-            "endpoint": s3_backup["endpoint"],
-            "region": s3_backup["region"],
-            "path": s3_backup.get("path", f"/{cluster_name}"),
-            "credentials": {
-                "accessKeyId": s3_backup["access_key"],
-                "secretAccessKey": s3_backup["secret_key"]
+        # Add plugin configuration to use Barman Cloud plugin
+        cnpg_cluster_values["cluster"]["plugins"] = [
+            {
+                "name": "barman-cloud.cloudnative-pg.io",
+                "parameters": {
+                    "serverName": cluster_name,
+                    "objectStore": f"{cluster_name}-backup-store"
+                }
             }
-        }
+        ]
+        # Remove built-in backup configuration as we're using the plugin
+        cnpg_cluster_values["backups"]["enabled"] = False
 
     # Add bootstrap configuration if enabled
     if s3_bootstrap and s3_bootstrap.get("enabled", False):
-        cnpg_cluster_values["cluster"]["bootstrap"] = {
-            "recovery": {
-                "source": "bootstrap-source",
-                "recoveryTarget": {
-                    "targetTime": ""  # Latest available
+        # Create a separate ObjectStore for recovery if different from backup
+        if (not s3_backup or
+            s3_bootstrap["endpoint"] != s3_backup.get("endpoint") or 
+            s3_bootstrap["bucket"] != s3_backup.get("bucket") or
+            s3_bootstrap["path"] != s3_backup.get("path", f"/{cluster_name}")):
+            
+            # Create separate credentials for bootstrap if needed
+            s3_bootstrap_secret = {
+                "apiVersion": "v1",
+                "kind": "Secret",
+                "metadata": {
+                    "name": f"{cluster_name}-s3-bootstrap-credentials",
+                    "namespace": namespace
+                },
+                "type": "Opaque",
+                "stringData": {
+                    "ACCESS_KEY_ID": s3_bootstrap["access_key"],
+                    "SECRET_ACCESS_KEY": s3_bootstrap["secret_key"],
+                    "REGION": s3_bootstrap["region"]
                 }
             }
-        }
-        cnpg_cluster_values["externalClusters"] = {
-            "bootstrap-source": {
-                "barmanObjectStore": {
-                    "destinationPath": s3_bootstrap["path"],
-                    "s3Credentials": {
-                        "accessKeyId": s3_bootstrap["access_key"],
-                        "secretAccessKey": s3_bootstrap["secret_key"],
-                        "region": s3_bootstrap["region"]
-                    },
-                    "endpointURL": s3_bootstrap["endpoint"],
-                    "wal": {
-                        "maxParallel": 8
+            resources.append(s3_bootstrap_secret)
+            
+            # Create bootstrap ObjectStore
+            bootstrap_object_store = {
+                "apiVersion": "barmancloud.cnpg.io/v1",
+                "kind": "ObjectStore",
+                "metadata": {
+                    "name": f"{cluster_name}-bootstrap-store",
+                    "namespace": namespace
+                },
+                "spec": {
+                    "configuration": {
+                        "destinationPath": f"s3://{s3_bootstrap['bucket']}{s3_bootstrap['path']}",
+                        "endpointURL": s3_bootstrap["endpoint"],
+                        "s3Credentials": {
+                            "accessKeyId": {
+                                "name": f"{cluster_name}-s3-bootstrap-credentials",
+                                "key": "ACCESS_KEY_ID"
+                            },
+                            "secretAccessKey": {
+                                "name": f"{cluster_name}-s3-bootstrap-credentials",
+                                "key": "SECRET_ACCESS_KEY"
+                            },
+                            "region": {
+                                "name": f"{cluster_name}-s3-bootstrap-credentials",
+                                "key": "REGION"
+                            }
+                        }
+                    }
+                }
+            }
+            resources.append(bootstrap_object_store)
+            object_store_name = f"{cluster_name}-bootstrap-store"
+        else:
+            # Use the same ObjectStore for recovery
+            object_store_name = f"{cluster_name}-backup-store"
+            
+        # Configure bootstrap recovery using the plugin
+        cnpg_cluster_values["cluster"]["bootstrap"] = {
+            "recovery": {
+                "source": "clusterBackup",
+                "clusterBackup": {
+                    "name": "barman-cloud.cloudnative-pg.io",
+                    "pluginConfiguration": {
+                        "parameters": {
+                            "objectStore": object_store_name
+                        }
                     }
                 }
             }
@@ -230,15 +343,108 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
     # Add database and user configuration
     cnpg_cluster_values["cluster"]["initdb"] = {
         "database": db_name,
-        "owner": superuser,
+        "owner": superuser,  # Superuser owns the database and has full access
         "secret": {
             "name": f"{cluster_name}-superuser-secret"
         }
     }
 
-    # Generate secrets for users
-    secrets = []
-    
+    # Set the superuser secret for the cluster
+    cnpg_cluster_values["cluster"]["superuserSecret"] = f"{cluster_name}-superuser-secret"
+
+    # Configure the regular user with limited database access
+    cnpg_cluster_values["cluster"]["roles"] = [
+        {
+            "name": username,
+            "ensure": "present",
+            "login": True,
+            "passwordSecret": {
+                "name": f"{cluster_name}-user-secret"
+            }
+        }
+    ]
+
+    # Add post-init SQL to grant database access to the regular user
+    if "initdb" not in cnpg_cluster_values["cluster"]:
+        cnpg_cluster_values["cluster"]["initdb"] = {}
+
+    cnpg_cluster_values["cluster"]["initdb"]["postInitApplicationSQL"] = [
+        f"GRANT CONNECT ON DATABASE {db_name} TO {username};",
+        f"GRANT USAGE ON SCHEMA public TO {username};",
+        f"GRANT CREATE ON SCHEMA public TO {username};",
+        f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {username};",
+        f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO {username};"
+    ]
+
+
+    # Generate secrets and other resources
+    resources = []
+
+    # Create ObjectStore resource for Barman plugin if S3 backup is enabled
+    if s3_backup and s3_backup.get("enabled", False):
+        # First create S3 credentials secret
+        s3_credentials_secret = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {
+                "name": f"{cluster_name}-s3-credentials",
+                "namespace": namespace
+            },
+            "type": "Opaque",
+            "stringData": {
+                "ACCESS_KEY_ID": s3_backup["access_key"],
+                "SECRET_ACCESS_KEY": s3_backup["secret_key"],
+                "REGION": s3_backup["region"]
+            }
+        }
+        resources.append(s3_credentials_secret)
+
+        # Create ObjectStore resource for Barman plugin
+        object_store = {
+            "apiVersion": "barmancloud.cnpg.io/v1",
+            "kind": "ObjectStore",
+            "metadata": {
+                "name": f"{cluster_name}-backup-store",
+                "namespace": namespace
+            },
+            "spec": {
+                "configuration": {
+                    "destinationPath": f"s3://{s3_backup['bucket']}{s3_backup.get('path', f'/{cluster_name}')}",
+                    "endpointURL": s3_backup["endpoint"],
+                    "s3Credentials": {
+                        "accessKeyId": {
+                            "name": f"{cluster_name}-s3-credentials",
+                            "key": "ACCESS_KEY_ID"
+                        },
+                        "secretAccessKey": {
+                            "name": f"{cluster_name}-s3-credentials",
+                            "key": "SECRET_ACCESS_KEY"
+                        },
+                        "region": {
+                            "name": f"{cluster_name}-s3-credentials",
+                            "key": "REGION"
+                        }
+                    },
+                    "wal": {
+                        "compression": "gzip",
+                        "maxParallel": 8
+                    },
+                    "data": {
+                        "compression": "gzip",
+                        "jobs": 2,
+                        "immediateCheckpoint": False
+                    }
+                },
+                "retentionPolicy": "30d"
+            }
+        }
+        resources.append(object_store)
+        
+        # Optionally add scheduled backup
+        # Uncomment the following lines to enable scheduled backups
+        # scheduled_backup = create_scheduled_backup_manifest(cluster_name, namespace, "0 2 * * *")
+        # resources.append(scheduled_backup)
+
     # Superuser secret
     superuser_secret = {
         "apiVersion": "v1",
@@ -253,9 +459,9 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
             "password": base64.b64encode(superuser_password.encode('ascii')).decode('ascii')
         }
     }
-    secrets.append(superuser_secret)
+    resources.append(superuser_secret)
 
-    # Regular user secret
+    # Regular user secret - only create if different from superuser
     if username != superuser:
         user_secret = {
             "apiVersion": "v1",
@@ -270,7 +476,7 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
                 "password": base64.b64encode(user_password.encode('ascii')).decode('ascii')
             }
         }
-        secrets.append(user_secret)
+        resources.append(user_secret)
 
     # Generate Skaffold configuration
     skaffold_config = {
@@ -294,34 +500,24 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
                 ]
             },
             "rawYaml": [
-                "./secrets.yaml"
+                "./resources.yaml"
             ]
         },
         "deploy": {
             "kubectl": {}
         },
     }
-    
+
     # Generate Fleet configuration
     fleet_config = {
         "dependsOn": [
             c.as_fleet_dependency for c in depends_on
         ] if depends_on else [],
-        "helm": {
-            "releaseName": f"{slug}-cnpg-cluster",
-        },
         "labels": {
-            "name": f"{slug}-cnpg-cluster",
+            "name": f"{slug}-cnpg-cluster"
         },
         "diff": {
             "comparePatches": [
-                {
-                    "apiVersion": "v1",
-                    "kind": "Secret",
-                    "jsonPointers": [
-                        "/data",
-                    ]
-                },
                 {
                     "apiVersion": "postgresql.cnpg.io/v1",
                     "kind": "Cluster",
@@ -330,7 +526,18 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
                         {
                             "op": "remove",
                             "path": "/status"
-                        },
+                        }
+                    ]
+                },
+                {
+                    "apiVersion": "bitnami.com/v1alpha1",
+                    "kind": "SealedSecret",
+                    "namespace": namespace,
+                    "operations": [
+                        {
+                            "op": "remove",
+                            "path": "/spec/encryptedData/password"
+                        }
                     ]
                 }
             ]
@@ -338,28 +545,37 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
     }
 
     # Write all configuration files
-    write(f"{output_dir}/cnpg-cluster-values.yaml", 
+    write(f"{output_dir}/cnpg-cluster-values.yaml",
           yaml.dump(cnpg_cluster_values, default_flow_style=False))
-    
-    write(f"{output_dir}/secrets.yaml", 
-          yaml.dump_all(secrets, default_flow_style=False))
-    
-    write(f"{output_dir}/skaffold-cnpg-cluster.yaml", 
+
+    write(f"{output_dir}/resources.yaml",
+          yaml.dump_all(resources, default_flow_style=False))
+
+    write(f"{output_dir}/skaffold-cnpg-cluster.yaml",
           yaml.dump(skaffold_config, default_flow_style=False))
-    
-    write(f"{output_dir}/fleet.yaml", 
+
+    write(f"{output_dir}/fleet.yaml",
           yaml.dump(fleet_config, default_flow_style=False))
 
     # Construct PostgreSQL connection URIs
-    service_name = f"{cluster_name}-rw"  # CloudNative PG creates read-write service with -rw suffix
-    superuser_postgres_uri = f"postgresql://{superuser}:{superuser_password}@{service_name}.{namespace}:5432/{db_name}?sslmode=require"
-    normal_user_postgres_uri = f"postgresql://{username}:{user_password}@{service_name}.{namespace}:5432/{db_name}?sslmode=require"
+    # Use the default rw service for internal connections and external service for external access
+    default_rw_service = f"{cluster_name}-rw"  # Default CloudNative PG read-write service
+    external_rw_service = f"{cluster_name}-rw-external"  # Custom external service
+    ro_service = f"{cluster_name}-ro-external"  # Custom read-only service
+
+    superuser_postgres_uri = f"postgresql://{superuser}:{superuser_password}@{default_rw_service}.{namespace}:5432/{db_name}?sslmode=require"
+    normal_user_postgres_uri = f"postgresql://{username}:{user_password}@{default_rw_service}.{namespace}:5432/{db_name}?sslmode=require"
+
+    # Additional connection URIs for external services
+    external_rw_postgres_uri = f"postgresql://{username}:{user_password}@{external_rw_service}.{namespace}:5432/{db_name}?sslmode=require"
+    readonly_postgres_uri = f"postgresql://{username}:{user_password}@{ro_service}.{namespace}:5432/{db_name}?sslmode=require"
 
     return CloudNativePgInstanceComponent(
         slug=slug,
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-cnpg-cluster",
+        depends_on=depends_on,
         superuser_postgres_uri=superuser_postgres_uri,
         normal_user_postgres_uri=normal_user_postgres_uri,
         cluster_name=cluster_name

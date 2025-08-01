@@ -13,6 +13,7 @@ from ilio import write
 from ..base.component_types import Component
 from ..base.constants import *
 from ..base.utils import get_chart_path
+from .cloudnative_pg_barman_plugin import create_cloudnative_pg_barman_plugin
 
 
 def create_cloudnative_pg_operator(
@@ -22,15 +23,22 @@ def create_cloudnative_pg_operator(
 ) -> Component:
     """
     Deploy the CloudNative PostgreSQL operator using Helm.
-    
+
     Args:
         slug: Unique identifier for the deployment
         namespace: Kubernetes namespace to deploy the operator
         depends_on: List of dependencies for Fleet
-        
+
     Returns:
         Component instance with deployment configuration
     """
+    # Create the Barman plugin component first
+    barman_plugin = create_cloudnative_pg_barman_plugin(
+        slug=f"{slug}-barman",
+        namespace=namespace,
+        depends_on=depends_on
+    )
+
     # Create directory structure
     dir_name = f"{slug}-cloudnative-pg-operator"
     output_dir = f'{GENERATED_SKAFFOLD_TMP_DIR}/{dir_name}'
@@ -69,15 +77,11 @@ def create_cloudnative_pg_operator(
             }
         }
     }
-    
+
     # Generate Skaffold configuration
     skaffold_config = {
         "apiVersion": "skaffold/v3",
         "kind": "Config",
-        "build": {
-            **SKAFFOLD_DEFAULT_BUILD,
-            "artifacts": [],
-        },
         "manifests": {
             "helm": {
                 "releases": [
@@ -99,12 +103,17 @@ def create_cloudnative_pg_operator(
             },
         },
     }
-    
+
     # Generate Fleet configuration
+    # Include barman_plugin and any external dependencies
+    all_dependencies = [barman_plugin]
+    if depends_on:
+        all_dependencies.extend(depends_on)
+
     fleet_config = {
         "dependsOn": [
-            c.as_fleet_dependency for c in depends_on
-        ] if depends_on else [],
+            c.as_fleet_dependency for c in all_dependencies
+        ],
         "helm": {
             "releaseName": f"{slug}-cloudnative-pg-operator",
         },
@@ -140,13 +149,13 @@ def create_cloudnative_pg_operator(
     }
 
     # Write all configuration files
-    write(f"{output_dir}/cnpg-values.yaml", 
+    write(f"{output_dir}/cnpg-values.yaml",
           yaml.dump(cnpg_values, default_flow_style=False))
-    
-    write(f"{output_dir}/skaffold-cloudnative-pg-operator.yaml", 
+
+    write(f"{output_dir}/skaffold-cloudnative-pg-operator.yaml",
           yaml.dump(skaffold_config, default_flow_style=False))
-    
-    write(f"{output_dir}/fleet.yaml", 
+
+    write(f"{output_dir}/fleet.yaml",
           yaml.dump(fleet_config, default_flow_style=False))
 
     return Component(
@@ -154,5 +163,5 @@ def create_cloudnative_pg_operator(
         namespace=namespace,
         dir_name=dir_name,
         fleet_name=f"{slug}-cloudnative-pg-operator",
-        depends_on=depends_on
+        depends_on=all_dependencies
     )
