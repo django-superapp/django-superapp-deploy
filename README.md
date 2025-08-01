@@ -7,6 +7,7 @@ django_superapp bootstrap-project \
 
 
 ### Quick setup
+0. Run `make setup-venv` and add this environment to your IDE
 0. Run `make setup-git-crypt`
 0. If you have a git-crypt key palce it in `./secrets/git_crypt.key` and then run `make unlock-git-crypt`
 0. If you don't have a git-crypt key, you can generate one using `make generate-git-crypt` to save it in a 1Password note

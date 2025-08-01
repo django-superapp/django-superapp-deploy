@@ -1,7 +1,6 @@
 import glob
 import os
 import sys
-
 import yaml
 
 CONSTANTS_FILE_ABOSLUTE_PATH = os.path.dirname(__file__)
@@ -13,7 +12,7 @@ else:
     # Try to detect the environment from the script path
     script_path = sys.argv[0] if len(sys.argv) > 0 else ''
     env_match = None
-    
+
     # Check if running from an environment directory
     if 'environments' in script_path:
         for env_dir in glob.glob(os.path.join(CONSTANTS_FILE_ABOSLUTE_PATH, "../environments/*/secrets")):
@@ -21,7 +20,7 @@ else:
             if env_name in script_path:
                 env_match = env_name
                 break
-    
+
     # If environment detected from path, use it
     if env_match:
         CONFIG_YAML_PATH = os.path.abspath(
@@ -84,6 +83,8 @@ INTELLIJ_RUN_CONFIGURATIONS_ENABLED = os.environ.get('INTELLIJ_RUN_CONFIGURATION
 GENERATED_SKAFFOLD_DIR = os.environ['GENERATED_SKAFFOLD_DIR']
 GENERATED_MANIFESTS_DIR = os.environ['GENERATED_MANIFESTS_DIR']
 GENERATED_SKAFFOLD_TMP_DIR = os.environ['GENERATED_SKAFFOLD_TMP_DIR']
+
+IMAGES_TAG = os.environ.get('IMAGES_TAG', 'latest')
 
 # Skaffold
 REMOTE_DOCKER_HOST = str(os.environ.get('REMOTE_DOCKER_HOST', '')).lower()

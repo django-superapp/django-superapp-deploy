@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 from typing import List, Optional
 
 from ilio import write
@@ -20,7 +21,7 @@ def create_registry(
 ) -> RegistryComponent:
     """
     Create a Kubernetes secret for Docker registry authentication.
-    
+
     Args:
         slug: Unique identifier for the deployment
         namespace: Kubernetes namespace to create the secret in
@@ -29,7 +30,7 @@ def create_registry(
         registry_password: Password for registry authentication
         insecure_registries: List of insecure registries
         depends_on: List of dependencies for Fleet
-        
+
     Returns:
         Directory name where the configuration is generated
     """
@@ -39,13 +40,13 @@ def create_registry(
     manifests_dir = f'{output_dir}/manifests'
     secret_name = f"{slug}-registry-secret"
     kaniko_secret_name = f"{slug}-registry-kaniko-secret"
-    
+
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(manifests_dir, exist_ok=True)
-    
+
     # Extract registry domain from URL
     registry_domain = registry_url.split("/")[0]
-    
+
     # Create registry secret
     docker_config = {
         "auths": {
@@ -55,11 +56,11 @@ def create_registry(
             }
         }
     }
-    
+
     # Add insecure registries if provided
     if insecure_registries:
         docker_config["insecure-registries"] = insecure_registries
-    
+
     # Create secret manifest
     # TODO: the below secret is not sealed correctly
     registry_secret = {
@@ -74,7 +75,7 @@ def create_registry(
         },
         "type": "kubernetes.io/dockerconfigjson"
     }
-    
+
     # Create kaniko opaque secret with registry credentials
     # Note: Skaffold expects an Opaque secret with config.json for Kaniko builds
     kaniko_registry_secret = {
@@ -92,13 +93,13 @@ def create_registry(
         },
         "type": "Opaque"
     }
-    
+
     # Write registry secret manifests
-    write(f"{manifests_dir}/registry-secret.yaml", 
+    write(f"{manifests_dir}/registry-secret.yaml",
           yaml.dump(registry_secret, default_flow_style=False))
-    write(f"{manifests_dir}/registry-kaniko-secret.yaml", 
+    write(f"{manifests_dir}/registry-kaniko-secret.yaml",
           yaml.dump(kaniko_registry_secret, default_flow_style=False))
-    
+
     # Generate skaffold.yaml
     skaffold_config = {
         "apiVersion": "skaffold/v3",
@@ -115,10 +116,10 @@ def create_registry(
             },
         },
     }
-    
+
     skaffold_yaml = yaml.dump(skaffold_config, default_flow_style=False)
     write(f"{output_dir}/skaffold-registry.yaml", skaffold_yaml)
-    
+
     # Generate fleet.yaml for dependencies
     fleet_config = {
         "dependsOn": [
@@ -131,10 +132,10 @@ def create_registry(
             "name": f"{slug}-registry",
         }
     }
-    
+
     fleet_yaml = yaml.dump(fleet_config, default_flow_style=False)
     write(f"{output_dir}/fleet.yaml", fleet_yaml)
-    
+
     return RegistryComponent(
         slug=slug,
         namespace=namespace,
@@ -146,3 +147,56 @@ def create_registry(
         fleet_name=f"{slug}-registry",
         depends_on=depends_on
     )
+
+
+def create_registries(
+    registries_config: List[dict],
+    depends_on: Optional[List[Component]] = None
+) -> List[RegistryComponent]:
+    """
+    Create multiple Docker registry secrets from configuration.
+
+    Args:
+        registries_config: List of registry configurations with structure:
+            [
+                {
+                    "secret_name": "my-registry-secret",
+                    "namespace": "my-namespace", 
+                    "url": "ghcr.io/myorg",
+                    "username": "myuser",
+                    "password": "mypass",
+                    "insecure_registries": ["localhost:5000"]  # optional
+                }
+            ]
+        depends_on: List of dependencies for Fleet
+
+    Returns:
+        List of RegistryComponent objects
+    """
+    registry_components = []
+    
+    for registry_config in registries_config:
+        secret_name = registry_config["secret_name"]
+        namespace = registry_config["namespace"]
+        registry_url = registry_config["url"]
+        registry_username = registry_config["username"]
+        registry_password = registry_config["password"]
+        insecure_registries = registry_config.get("insecure_registries")
+        
+        # Create a slug from the secret name (remove -registry-secret suffix if present)
+        slug = secret_name.replace("-registry-secret", "").replace("_", "-")
+        
+        registry_component = create_registry(
+            slug=slug,
+            namespace=namespace,
+            registry_url=registry_url,
+            registry_username=registry_username,
+            registry_password=registry_password,
+            insecure_registries=insecure_registries,
+            depends_on=depends_on
+        )
+        
+        registry_components.append(registry_component)
+    
+    return registry_components
+

@@ -1,0 +1,57 @@
+{{- if .Values.certManager.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: barman-cloud-client
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+spec:
+  commonName: barman-cloud-client
+  duration: {{ .Values.certManager.duration }}
+  isCA: false
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: barman-cloud-selfsigned-issuer
+  renewBefore: {{ .Values.certManager.renewBefore }}
+  secretName: barman-cloud-client-tls
+  usages:
+  - client auth
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: barman-cloud-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+spec:
+  commonName: barman-cloud
+  dnsNames:
+  - barman-cloud
+  - barman-cloud.{{ .Values.namespace }}
+  - barman-cloud.{{ .Values.namespace }}.svc
+  - barman-cloud.{{ .Values.namespace }}.svc.cluster.local
+  duration: {{ .Values.certManager.duration }}
+  isCA: false
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: barman-cloud-selfsigned-issuer
+  renewBefore: {{ .Values.certManager.renewBefore }}
+  secretName: barman-cloud-server-tls
+  usages:
+  - server auth
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: barman-cloud-selfsigned-issuer
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "cloudnative-pg-barman-plugin.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+{{- end }}

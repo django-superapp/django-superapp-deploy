@@ -49,6 +49,106 @@ cd "$GENERATED_MANIFESTS_DIR";
 echo "Rendering skaffolds..";
 cd "$GENERATED_SKAFFOLD_DIR";
 
+# Helper function to extract namespace from skaffold config files
+function extract_namespace_from_skaffold {
+  local extracted_ns=""
+  
+  # Function to extract namespace from a single file
+  extract_from_file() {
+    local file="$1"
+    local ns=""
+    
+    # Try defaultNamespace first
+    ns=$(yq eval '.deploy.kubectl.defaultNamespace // ""' "$file" 2>/dev/null)
+    
+    # If not found, try helm releases namespace
+    if [ -z "$ns" ] || [ "$ns" = "null" ]; then
+      ns=$(yq eval '.manifests.helm.releases[0].namespace // ""' "$file" 2>/dev/null)
+    fi
+    
+    # Filter out null and empty values
+    if [ "$ns" = "null" ] || [ -z "$ns" ]; then
+      ns=""
+    fi
+    
+    echo "$ns"
+  }
+  
+  # First check main skaffold.yaml
+  if [ -e "skaffold.yaml" ]; then
+    extracted_ns=$(extract_from_file "skaffold.yaml")
+  fi
+  
+  # If not found in main file, check skaffold-*.yaml files
+  if [ -z "$extracted_ns" ]; then
+    for skaffold_file in skaffold-*.yaml; do
+      if [ -f "$skaffold_file" ]; then
+        extracted_ns=$(extract_from_file "$skaffold_file")
+        [ -n "$extracted_ns" ] && break
+      fi
+    done
+  fi
+  
+  # If still not found, try to extract from fleet.yaml
+  if [ -z "$extracted_ns" ] && [ -f "fleet.yaml" ]; then
+    extracted_ns=$(yq eval '.diff.comparePatches[0].namespace // .diff.comparePatches[1].namespace // ""' "fleet.yaml" 2>/dev/null)
+    # Filter out null and empty values
+    if [ "$extracted_ns" = "null" ] || [ -z "$extracted_ns" ]; then
+      extracted_ns=""
+    fi
+  fi
+  
+  # If still not found, try to extract from manifests.yaml (for namespace components)
+  if [ -z "$extracted_ns" ] && [ -f "manifests.yaml" ]; then
+    # Check if this is a namespace manifest itself
+    kind=$(yq eval '.kind // ""' "manifests.yaml" 2>/dev/null)
+    if [ "$kind" = "Namespace" ]; then
+      extracted_ns=$(yq eval '.metadata.name // ""' "manifests.yaml" 2>/dev/null)
+    else
+      # Try to extract namespace from any resource metadata (take first non-empty value)
+      extracted_ns=$(yq eval '.metadata.namespace // ""' "manifests.yaml" 2>/dev/null | grep -v '^$' | grep -v '^null$' | head -1)
+    fi
+    # Filter out null and empty values
+    if [ "$extracted_ns" = "null" ] || [ -z "$extracted_ns" ]; then
+      extracted_ns=""
+    fi
+  fi
+  
+  # Last resort: try to extract namespace from service references in manifests.yaml
+  if [ -z "$extracted_ns" ] && [ -f "manifests.yaml" ]; then
+    # Look for service references like "service.namespace:port" in the file
+    extracted_ns=$(grep -oE "\.radio-crestin-[a-zA-Z0-9_-]+:" "manifests.yaml" 2>/dev/null | head -1 | sed 's/^\.//;s/:$//' || echo "")
+    # Filter out empty values
+    if [ -z "$extracted_ns" ]; then
+      extracted_ns=""
+    fi
+  fi
+  
+  # Final fallback: look for namespace manifests in subdirectories
+  if [ -z "$extracted_ns" ]; then
+    # Find Namespace kind manifest files in subdirectories
+    for subdir in */ ; do
+      if [ -d "$subdir" ]; then
+        namespace_file=$(find "$subdir" -name "*-Namespace.yml" -o -name "*Namespace.yaml" 2>/dev/null | head -1)
+        if [ -n "$namespace_file" ] && [ -f "$namespace_file" ]; then
+          kind=$(yq eval '.kind // ""' "$namespace_file" 2>/dev/null)
+          if [ "$kind" = "Namespace" ]; then
+            extracted_ns=$(yq eval '.metadata.name // ""' "$namespace_file" 2>/dev/null)
+            # Filter out null and empty values
+            if [ "$extracted_ns" != "null" ] && [ -n "$extracted_ns" ]; then
+              break
+            else
+              extracted_ns=""
+            fi
+          fi
+        fi
+      fi
+    done
+  fi
+  
+  echo "$extracted_ns"
+}
+
 function render_skaffold {
   local d=$1
   local tmpfile=$2
@@ -58,10 +158,16 @@ function render_skaffold {
   mkdir -p "$GENERATED_MANIFESTS_DIR/$d"
   cp fleet.yaml "$GENERATED_MANIFESTS_DIR/$d"
 
-  if [[ $d =~ .*common.* ]]; then
-    export NS=$BRIDGE_COMMON_NAMESPACE
+  # Extract namespace from skaffold config files
+  extracted_ns=$(extract_namespace_from_skaffold)
+  
+  # Use extracted namespace or exit with error if not found
+  if [ -n "$extracted_ns" ]; then
+    export NS="$extracted_ns"
+    echo "Using extracted namespace: $NS for $d"
   else
-    export NS=$NAMESPACE
+    echo "Error: No namespace found in skaffold configuration for $d"
+    exit 1
   fi
 
   if [ -e "skaffold.yaml" ]; then
@@ -87,6 +193,7 @@ function render_skaffold {
   cd ..
 }
 
+export -f extract_namespace_from_skaffold  # Export the helper function
 export -f render_skaffold  # Export the function to be used by subshells
 
 pids=()  # Array to hold process IDs
@@ -152,7 +259,18 @@ handle_error() {
 for d in */ ; do
   cd "$d" || handle_error "$d" "cd $d"
   echo "Processing $d";
-  [[ $d =~ .*common.* ]] && export NS=$BRIDGE_COMMON_NAMESPACE || export NS=$NAMESPACE;
+  
+  # Extract namespace from skaffold config files
+  extracted_ns=$(extract_namespace_from_skaffold)
+  
+  # Use extracted namespace or exit with error if not found
+  if [ -n "$extracted_ns" ]; then
+    export NS="$extracted_ns"
+    echo "Using extracted namespace: $NS for processing $d"
+  else
+    echo "Error: No namespace found in skaffold configuration for processing $d"
+    exit 1
+  fi
 
   if [ -e "manifests.yaml" ] && [ -s "manifests.yaml" ] && yq eval '.metadata.name' manifests.yaml 2>/dev/null | grep -v '^---$' | grep -v '^null$' | grep -q .; then
         #  cp manifests.yaml manifests.yaml.bak;
@@ -161,7 +279,7 @@ for d in */ ; do
         yq eval --inplace 'del(. | select(. == null or . == ""))' manifests.yaml || handle_error "$d" "yq delete empty elements"
 
         echo "Adding namespace value in each manifest file..";
-        yq eval --inplace "select(.metadata.namespace == \"\" and .kind != \"CustomResourceDefinition\" and .kind != \"MutatingWebhookConfiguration\" and .kind != \"ValidatingWebhookConfiguration\" and .kind != \"ClusterRoleBinding\" and .kind != \"Namespace\" and \"$NS\" != \"\") |= .metadata.namespace = \"$NS\"" manifests.yaml || handle_error "$d" "yq add namespace"
+        yq eval --inplace "select((.metadata.namespace == \"\" or .metadata.namespace == null) and .kind != \"CustomResourceDefinition\" and .kind != \"MutatingWebhookConfiguration\" and .kind != \"ValidatingWebhookConfiguration\" and .kind != \"ClusterRoleBinding\" and .kind != \"Namespace\" and \"$NS\" != \"\") |= .metadata.namespace = \"$NS\"" manifests.yaml || handle_error "$d" "yq add namespace"
         sync;
 
         echo "Creating manifests subdirectories..";

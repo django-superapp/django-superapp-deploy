@@ -1,0 +1,54 @@
+1. CloudNativePG Barman Plugin has been installed!
+
+The plugin enables object store backups for your PostgreSQL clusters managed by CloudNativePG.
+
+2. To use the plugin with your PostgreSQL clusters, you need to:
+
+   a. Create an ObjectStore resource defining your backup configuration
+   b. Reference the ObjectStore in your Cluster resource using the plugin section
+
+Example ObjectStore configuration:
+
+```yaml
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: my-backup-store
+  namespace: {{ .Values.namespace }}
+spec:
+  configuration:
+    destinationPath: "s3://my-bucket/postgres-backups"
+    s3Credentials:
+      accessKeyId:
+        name: backup-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: backup-credentials
+        key: SECRET_ACCESS_KEY
+      region:
+        name: backup-credentials
+        key: REGION
+    wal:
+      compression: gzip
+    data:
+      compression: gzip
+      jobs: 2
+  retentionPolicy: "30d"
+```
+
+Example Cluster configuration with plugin:
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: my-postgres-cluster
+spec:
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      parameters:
+        serverName: my-postgres-cluster
+        objectStore: my-backup-store
+```
+
+For more information, visit: https://cloudnative-pg.io/documentation/

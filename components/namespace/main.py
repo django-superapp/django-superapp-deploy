@@ -99,3 +99,47 @@ def create_namespace(
         fleet_name=f"{slug}-namespace",
         depends_on=depends_on
     )
+
+
+def create_namespaces(
+    namespaces_config: List[dict],
+    depends_on: Optional[List[Component]] = None
+) -> List[Component]:
+    """
+    Create multiple Kubernetes namespaces from configuration.
+
+    Args:
+        namespaces_config: List of namespace configurations with structure:
+            [
+                {
+                    "name": "my-namespace",
+                    "labels": {"environment": "production"},  # optional
+                    "annotations": {"description": "Production namespace"}  # optional
+                }
+            ]
+        depends_on: List of dependencies for Fleet
+
+    Returns:
+        List of Component objects representing the created namespaces
+    """
+    namespace_components = []
+    
+    for namespace_config in namespaces_config:
+        namespace_name = namespace_config["name"]
+        labels = namespace_config.get("labels")
+        annotations = namespace_config.get("annotations")
+        
+        # Create a slug from the namespace name
+        slug = namespace_name.replace("_", "-")
+        
+        namespace_component = create_namespace(
+            slug=slug,
+            namespace=namespace_name,
+            labels=labels,
+            annotations=annotations,
+            depends_on=depends_on
+        )
+        
+        namespace_components.append(namespace_component)
+    
+    return namespace_components

@@ -47,9 +47,6 @@ def _resolve_dependencies(components: List[Component]) -> List[Component]:
 def generate_skaffolds(components: List[Component]):
     # Resolve dependencies to get the correct order and avoid duplicates
     resolved_components = _resolve_dependencies(components)
-
-    print(f"components: {[_get_component_id(c) for c in components]}")
-    print(f"resolved_components: {[_get_component_id(c) for c in resolved_components]}")
     global_skaffold_paths = []
     for component in resolved_components:
         dir_name = component.dir_name

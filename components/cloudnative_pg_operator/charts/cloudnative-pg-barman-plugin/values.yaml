@@ -1,0 +1,84 @@
+# Default values for cloudnative-pg-barman-plugin.
+# This is a YAML-formatted file.
+# Declare variables to be passed to your templates.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/cloudnative-pg/plugin-barman-cloud
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "v0.5.0"
+
+sidecar:
+  # The sidecar image that runs in the PostgreSQL instance pods
+  image: ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.5.0
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Log level for the plugin (debug, info, warn, error)
+logLevel: debug
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "plugin-barman-cloud"
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsGroup: 10001
+  runAsUser: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+service:
+  type: ClusterIP
+  port: 9090
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# cert-manager configuration for TLS certificates
+certManager:
+  # Enable cert-manager for automatic certificate generation
+  enabled: true
+  # Duration of the certificates
+  duration: 2160h
+  # Renew certificates before expiry
+  renewBefore: 360h
+
+# Namespace where the plugin will be installed
+# This should match the CloudNativePG operator namespace
+namespace: cnpg-system
