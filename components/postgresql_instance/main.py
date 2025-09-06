@@ -135,6 +135,7 @@ CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 CREATE EXTENSION IF NOT EXISTS postgis_topology;
 CREATE EXTENSION IF NOT EXISTS ltree;
 CREATE EXTENSION IF NOT EXISTS plpython3u;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 GRANT USAGE ON SCHEMA cron TO {username};
 """
@@ -313,7 +314,7 @@ GRANT USAGE ON SCHEMA cron TO {username};
                             "min_wal_size": "50",
                             "random_page_cost": "1.1",
                             "shared_buffers": "256MB",
-                            "shared_preload_libraries": "timescaledb,pg_stat_statements,pg_cron",
+                            "shared_preload_libraries": "timescaledb,pg_stat_statements,pg_cron,pg_trgm",
                             "wal_buffers": "12MB",
                             "wal_compression": "on",
                             "work_mem": "19660kB"

@@ -56,6 +56,7 @@ class S3BootstrapConfig(TypedDict, total=False):
         access_key: S3 access key
         secret_key: S3 secret key
         path: Path within the bucket
+        server_name: Name of the server backup to restore from (default: cluster-example)
     """
     enabled: bool
     endpoint: str
@@ -64,6 +65,7 @@ class S3BootstrapConfig(TypedDict, total=False):
     access_key: str
     secret_key: str
     path: str
+    server_name: Optional[str]
 
 
 class CloudNativePgInstanceConfig(TypedDict, total=False):
@@ -109,12 +111,12 @@ class CloudNativePgInstanceConfig(TypedDict, total=False):
 def create_scheduled_backup_manifest(cluster_name: str, namespace: str, schedule: str = "0 2 * * *") -> dict:
     """
     Create a ScheduledBackup manifest for the Barman plugin.
-    
+
     Args:
         cluster_name: Name of the PostgreSQL cluster
         namespace: Kubernetes namespace
         schedule: Cron schedule for backups (default: daily at 2 AM)
-        
+
     Returns:
         ScheduledBackup manifest dictionary
     """
@@ -174,6 +176,9 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
 
     cluster_name = f"{slug}-pg"
 
+    # Initialize resources list early to collect all resources
+    resources = []
+
     # Default PostgreSQL parameters (excluding fixed configuration parameters)
     default_postgresql_params = {
         "max_connections": "200",
@@ -202,6 +207,7 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
     # Generate Helm values for CloudNative PG cluster
     cnpg_cluster_values = {
         "fullnameOverride": cluster_name,
+        "mode": "recovery" if (s3_bootstrap and s3_bootstrap.get("enabled", False)) else "standalone",
         "cluster": {
             "instances": instances,
             "imageName": CNPG_DEFAULT_IMAGE,
@@ -271,87 +277,63 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
 
     # Add bootstrap configuration if enabled
     if s3_bootstrap and s3_bootstrap.get("enabled", False):
-        # Create a separate ObjectStore for recovery if different from backup
-        if (not s3_backup or
-            s3_bootstrap["endpoint"] != s3_backup.get("endpoint") or 
-            s3_bootstrap["bucket"] != s3_backup.get("bucket") or
-            s3_bootstrap["path"] != s3_backup.get("path", f"/{cluster_name}")):
-            
-            # Create separate credentials for bootstrap if needed
-            s3_bootstrap_secret = {
-                "apiVersion": "v1",
-                "kind": "Secret",
-                "metadata": {
-                    "name": f"{cluster_name}-s3-bootstrap-credentials",
-                    "namespace": namespace
-                },
-                "type": "Opaque",
-                "stringData": {
-                    "ACCESS_KEY_ID": s3_bootstrap["access_key"],
-                    "SECRET_ACCESS_KEY": s3_bootstrap["secret_key"],
-                    "REGION": s3_bootstrap["region"]
-                }
-            }
-            resources.append(s3_bootstrap_secret)
-            
-            # Create bootstrap ObjectStore
-            bootstrap_object_store = {
-                "apiVersion": "barmancloud.cnpg.io/v1",
-                "kind": "ObjectStore",
-                "metadata": {
-                    "name": f"{cluster_name}-bootstrap-store",
-                    "namespace": namespace
-                },
-                "spec": {
-                    "configuration": {
-                        "destinationPath": f"s3://{s3_bootstrap['bucket']}{s3_bootstrap['path']}",
-                        "endpointURL": s3_bootstrap["endpoint"],
-                        "s3Credentials": {
-                            "accessKeyId": {
-                                "name": f"{cluster_name}-s3-bootstrap-credentials",
-                                "key": "ACCESS_KEY_ID"
-                            },
-                            "secretAccessKey": {
-                                "name": f"{cluster_name}-s3-bootstrap-credentials",
-                                "key": "SECRET_ACCESS_KEY"
-                            },
-                            "region": {
-                                "name": f"{cluster_name}-s3-bootstrap-credentials",
-                                "key": "REGION"
-                            }
-                        }
-                    }
-                }
-            }
-            resources.append(bootstrap_object_store)
-            object_store_name = f"{cluster_name}-bootstrap-store"
-        else:
-            # Use the same ObjectStore for recovery
-            object_store_name = f"{cluster_name}-backup-store"
-            
-        # Configure bootstrap recovery using the plugin
-        cnpg_cluster_values["cluster"]["bootstrap"] = {
-            "recovery": {
-                "source": "clusterBackup",
-                "clusterBackup": {
-                    "name": "barman-cloud.cloudnative-pg.io",
-                    "pluginConfiguration": {
-                        "parameters": {
-                            "objectStore": object_store_name
-                        }
-                    }
-                }
+        # Get server name from config or use default
+        server_name = s3_bootstrap.get("server_name", "cluster-example")
+
+        # Configure recovery values for Helm chart
+        cnpg_cluster_values["recovery"] = {
+            "method": "object_store",
+            "clusterName": server_name,
+            "database": db_name,
+            "owner": superuser,
+            "provider": "s3",
+            "endpointURL": s3_bootstrap["endpoint"],
+            "destinationPath": f"s3://{s3_bootstrap['bucket']}{s3_bootstrap.get('path', f'/{cluster_name}')}",
+            "s3": {
+                "region": s3_bootstrap["region"],
+                "bucket": s3_bootstrap["bucket"],
+                "path": s3_bootstrap.get("path", f'/{cluster_name}'),
+                "accessKey": s3_bootstrap["access_key"],
+                "secretKey": s3_bootstrap["secret_key"],
+                "inheritFromIAMRole": False
+            },
+            "secret": {
+                "create": True,
+                "name": f"{cluster_name}-recovery-credentials"
             }
         }
 
     # Add database and user configuration
-    cnpg_cluster_values["cluster"]["initdb"] = {
-        "database": db_name,
-        "owner": superuser,  # Superuser owns the database and has full access
-        "secret": {
-            "name": f"{cluster_name}-superuser-secret"
+    # In recovery mode, initdb is handled differently by the Helm template
+    if not (s3_bootstrap and s3_bootstrap.get("enabled", False)):
+        cnpg_cluster_values["cluster"]["initdb"] = {
+            "database": db_name,
+            "owner": superuser,  # Superuser owns the database and has full access
+            "secret": {
+                "name": f"{cluster_name}-superuser-secret"
+            },
+            "postInitApplicationSQL": [
+                f"GRANT CONNECT ON DATABASE {db_name} TO {username};",
+                f"GRANT USAGE ON SCHEMA public TO {username};",
+                f"GRANT CREATE ON SCHEMA public TO {username};",
+                f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {username};",
+                f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO {username};"
+            ]
         }
-    }
+    else:
+        # In recovery mode, we still need the initdb with secret for the test template
+        cnpg_cluster_values["cluster"]["initdb"] = {
+            "secret": {
+                "name": f"{cluster_name}-superuser-secret"
+            },
+            "postInitApplicationSQL": [
+                f"GRANT CONNECT ON DATABASE {db_name} TO {username};",
+                f"GRANT USAGE ON SCHEMA public TO {username};",
+                f"GRANT CREATE ON SCHEMA public TO {username};",
+                f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {username};",
+                f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO {username};"
+            ]
+        }
 
     # Set the superuser secret for the cluster
     cnpg_cluster_values["cluster"]["superuserSecret"] = f"{cluster_name}-superuser-secret"
@@ -368,21 +350,6 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
         }
     ]
 
-    # Add post-init SQL to grant database access to the regular user
-    if "initdb" not in cnpg_cluster_values["cluster"]:
-        cnpg_cluster_values["cluster"]["initdb"] = {}
-
-    cnpg_cluster_values["cluster"]["initdb"]["postInitApplicationSQL"] = [
-        f"GRANT CONNECT ON DATABASE {db_name} TO {username};",
-        f"GRANT USAGE ON SCHEMA public TO {username};",
-        f"GRANT CREATE ON SCHEMA public TO {username};",
-        f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {username};",
-        f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO {username};"
-    ]
-
-
-    # Generate secrets and other resources
-    resources = []
 
     # Create ObjectStore resource for Barman plugin if S3 backup is enabled
     if s3_backup and s3_backup.get("enabled", False):
@@ -443,7 +410,7 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
             }
         }
         resources.append(object_store)
-        
+
         # Add scheduled backup if schedule is provided
         backup_schedule = s3_backup.get("backup_schedule")
         if backup_schedule:
