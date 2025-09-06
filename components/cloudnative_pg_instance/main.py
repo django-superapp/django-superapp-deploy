@@ -30,6 +30,8 @@ class S3BackupConfig(TypedDict, total=False):
         access_key: S3 access key
         secret_key: S3 secret key
         path: Path within the bucket (optional)
+        backup_schedule: Cron schedule for automatic backups (optional)
+        retention_policy: Retention policy for backups (e.g., "30d") (optional)
     """
     enabled: bool
     endpoint: str
@@ -38,6 +40,8 @@ class S3BackupConfig(TypedDict, total=False):
     access_key: str
     secret_key: str
     path: Optional[str]
+    backup_schedule: Optional[str]
+    retention_policy: Optional[str]
 
 
 class S3BootstrapConfig(TypedDict, total=False):
@@ -252,13 +256,13 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
 
     # Configure Barman plugin instead of built-in backup
     if s3_backup and s3_backup.get("enabled", False):
-        # Add plugin configuration to use Barman Cloud plugin
+        # Add plugin configuration to use Barman Cloud plugin for WAL archiving
         cnpg_cluster_values["cluster"]["plugins"] = [
             {
                 "name": "barman-cloud.cloudnative-pg.io",
+                "isWALArchiver": True,
                 "parameters": {
-                    "serverName": cluster_name,
-                    "objectStore": f"{cluster_name}-backup-store"
+                    "barmanObjectName": f"{cluster_name}-backup-store"
                 }
             }
         ]
@@ -435,15 +439,34 @@ def create_cloudnative_pg_instance(config: CloudNativePgInstanceConfig) -> Cloud
                         "immediateCheckpoint": False
                     }
                 },
-                "retentionPolicy": "30d"
+                "retentionPolicy": s3_backup.get("retention_policy", "30d")
             }
         }
         resources.append(object_store)
         
-        # Optionally add scheduled backup
-        # Uncomment the following lines to enable scheduled backups
-        # scheduled_backup = create_scheduled_backup_manifest(cluster_name, namespace, "0 2 * * *")
-        # resources.append(scheduled_backup)
+        # Add scheduled backup if schedule is provided
+        backup_schedule = s3_backup.get("backup_schedule")
+        if backup_schedule:
+            scheduled_backup = {
+                "apiVersion": "postgresql.cnpg.io/v1",
+                "kind": "ScheduledBackup",
+                "metadata": {
+                    "name": f"{cluster_name}-backup",
+                    "namespace": namespace
+                },
+                "spec": {
+                    "cluster": {
+                        "name": cluster_name
+                    },
+                    "schedule": backup_schedule,
+                    "backupOwnerReference": "self",
+                    "method": "plugin",
+                    "pluginConfiguration": {
+                        "name": "barman-cloud.cloudnative-pg.io"
+                    }
+                }
+            }
+            resources.append(scheduled_backup)
 
     # Superuser secret
     superuser_secret = {

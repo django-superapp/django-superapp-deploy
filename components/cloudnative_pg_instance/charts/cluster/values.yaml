@@ -367,6 +367,14 @@ cluster:
 
   additionalLabels: {}
   annotations: {}
+  
+  # -- Plugin configuration for CloudNativePG
+  # See: https://cloudnative-pg.io/documentation/current/plugins/
+  plugins: []
+    # - name: barman-cloud.cloudnative-pg.io
+    #   isWALArchiver: true
+    #   parameters:
+    #     barmanObjectName: cluster-backup-store
 
 
 backups:
